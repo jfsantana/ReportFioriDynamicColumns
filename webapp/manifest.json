@@ -67,6 +67,15 @@
   },
   "sap.ui5": {
     "flexEnabled": true,
+    "extends": {
+      "extensions": {
+        "sap.ui.controllerExtensions": {
+          "sap.fe.templates.ListReport.ListReportController": {
+            "controllerName": "yatl01.reportecolumnasdinamicas.ext.controller.TaxReportEnrichedListExtension"
+          }
+        }
+      }
+    },
     "dependencies": {
       "minUI5Version": "1.130.9",
       "libs": {
