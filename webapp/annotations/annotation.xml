@@ -1,0 +1,85 @@
+<edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" 
+           Version="4.0">
+    <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/Common.xml">
+        <edmx:Include Namespace="com.sap.vocabularies.Common.v1" 
+                      Alias="Common"/>
+    </edmx:Reference>
+    <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/UI.xml">
+        <edmx:Include Namespace="com.sap.vocabularies.UI.v1" 
+                      Alias="UI"/>
+    </edmx:Reference>
+    <edmx:Reference Uri="/sap/opu/odata4/sap/ymqaf_sb_taxrpt_enriched/srvd/sap/ymqaf_sd_taxrpt_enriched/0001/$metadata">
+        <edmx:Include Namespace="com.sap.gateway.srvd.ymqaf_sd_taxrpt_enriched.v0001" 
+                      Alias="SAP__self"/>
+    </edmx:Reference>
+    <edmx:DataServices>
+        <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" 
+                Namespace="local">
+
+            <!-- FILTROS: Parámetros obligatorios -->
+            <Annotations Target="SAP__self.TaxReportEnrichedParameters">
+                <Annotation Term="UI.SelectionFields">
+                    <Collection>
+                        <PropertyPath>P_CompanyCode</PropertyPath>
+                        <PropertyPath>P_FiscalYear</PropertyPath>
+                    </Collection>
+                </Annotation>
+            </Annotations>
+
+            <!-- TABLA: Columnas del reporte -->
+            <Annotations Target="SAP__self.TaxReportEnrichedType">
+                <Annotation Term="UI.HeaderInfo">
+                    <Record Type="UI.HeaderInfoType">
+                        <PropertyValue Property="TypeName" 
+                                       String="Reporte Tax"/>
+                        <PropertyValue Property="TypeNamePlural" 
+                                       String="Reporte Tax"/>
+                        <PropertyValue Property="Title">
+                            <Record Type="UI.DataField">
+                                <PropertyValue Property="Value" 
+                                               Path="AccountingDocument"/>
+                            </Record>
+                        </PropertyValue>
+                    </Record>
+                </Annotation>
+                <Annotation Term="UI.LineItem">
+                    <Collection>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" 
+                                           Path="AccountingDocument"/>
+                            <PropertyValue Property="Label" 
+                                           String="Nº Documento"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" 
+                                           Path="TransactionCurrency"/>
+                            <PropertyValue Property="Label" 
+                                           String="Moneda"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="c1"/>
+                            <PropertyValue Property="Label" String="C1"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="c2"/>
+                            <PropertyValue Property="Label" String="C2"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="c3"/>
+                            <PropertyValue Property="Label" String="C3"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="c4"/>
+                            <PropertyValue Property="Label" String="C4"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="c5"/>
+                            <PropertyValue Property="Label" String="C5"/>
+                        </Record>
+                    </Collection>
+                </Annotation>
+            </Annotations>
+
+        </Schema>
+    </edmx:DataServices>
+</edmx:Edmx>
