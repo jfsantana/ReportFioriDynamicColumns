@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## Application Details
 |               |
 | ------------- |
@@ -41,3 +42,7 @@ An SAP Fiori application.
 1. Active NodeJS LTS (Long Term Support) version and associated supported NPM version.  (See https://nodejs.org)
 
 
+=======
+# ReportFioriDynamicColumns
+Aplicación SAP Fiori para gestionar columnas dinámicas.
+>>>>>>> 1e2b082fac4da636a31b38a931b3870d43857b82
