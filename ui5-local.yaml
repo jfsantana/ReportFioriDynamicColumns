@@ -10,7 +10,9 @@ framework:
   libraries:
     - name: sap.m
     - name: sap.ui.core
-    - name: sap.fe.templates
+    - name: sap.suite.ui.generic.template
+    - name: sap.ui.comp
+    - name: sap.f
     - name: sap.ushell
     - name: themelib_sap_horizon
 server:
@@ -39,11 +41,10 @@ server:
       configuration:
         mountPath: /
         services:
-          - urlPath: /sap/opu/odata4/sap/ymqaf_sb_taxrpt_enriched/srvd/sap/ymqaf_sd_taxrpt_enriched/0001
+          - urlPath: /sap/opu/odata/sap/YMQAF_SB_TAXRPT_ENRICH_V2
             metadataPath: ./webapp/localService/mainService/metadata.xml
             mockdataPath: ./webapp/localService/mainService/data
             generateMockData: true
-            resolveExternalServiceReferences: true
         annotations: []
 builder:
   resources:

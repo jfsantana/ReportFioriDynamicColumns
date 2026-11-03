@@ -1,11 +1,11 @@
 {
-  "_version": "1.60.0",
+  "_version": "1.58.0",
   "sap.app": {
     "id": "yatl01.reportecolumnasdinamicas",
     "type": "application",
     "i18n": "i18n/i18n.properties",
     "applicationVersion": {
-      "version": "0.0.1"
+      "version": "0.0.2"
     },
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
@@ -16,22 +16,22 @@
       "toolsId": "63305533-c0f6-4154-935f-0400f57f3ccd"
     },
     "dataSources": {
-      "annotation": {
-        "type": "ODataAnnotation",
-        "uri": "annotations/annotation.xml",
-        "settings": {
-          "localUri": "annotations/annotation.xml"
-        }
-      },
       "mainService": {
-        "uri": "/sap/opu/odata4/sap/ymqaf_sb_taxrpt_enriched/srvd/sap/ymqaf_sd_taxrpt_enriched/0001/",
+        "uri": "/sap/opu/odata/sap/YMQAF_SB_TAXRPT_ENRICH_V2/",
         "type": "OData",
         "settings": {
           "annotations": [
             "annotation"
           ],
           "localUri": "localService/mainService/metadata.xml",
-          "odataVersion": "4.0"
+          "odataVersion": "2.0"
+        }
+      },
+      "annotation": {
+        "type": "ODataAnnotation",
+        "uri": "annotations/annotation.xml",
+        "settings": {
+          "localUri": "annotations/annotation.xml"
         }
       }
     },
@@ -67,21 +67,14 @@
   },
   "sap.ui5": {
     "flexEnabled": true,
-    "extends": {
-      "extensions": {
-        "sap.ui.controllerExtensions": {
-          "sap.fe.templates.ListReport.ListReportController": {
-            "controllerName": "yatl01.reportecolumnasdinamicas.ext.controller.TaxReportEnrichedListExtension"
-          }
-        }
-      }
-    },
     "dependencies": {
       "minUI5Version": "1.120.0",
       "libs": {
         "sap.m": {},
         "sap.ui.core": {},
-        "sap.fe.templates": {}
+        "sap.ui.comp": {},
+        "sap.f": {},
+        "sap.suite.ui.generic.template": {}
       }
     },
     "contentDensities": {
@@ -99,9 +92,9 @@
         "dataSource": "mainService",
         "preload": true,
         "settings": {
-          "operationMode": "Server",
-          "autoExpandSelect": true,
-          "earlyRequests": true
+          "defaultBindingMode": "TwoWay",
+          "defaultCountMode": "Inline",
+          "refreshAfterChange": false
         }
       },
       "@i18n": {
@@ -109,65 +102,60 @@
         "uri": "i18n/i18n.properties"
       }
     },
-    "resources": {
-      "css": []
-    },
-    "routing": {
-      "config": {},
-      "routes": [
-        {
-          "pattern": ":?query:",
-          "name": "TaxReportEnrichedList",
-          "target": "TaxReportEnrichedList"
+    "extends": {
+      "extensions": {
+        "sap.ui.viewExtensions": {
+          "sap.suite.ui.generic.template.ListReport.view.ListReport": {
+            "SmartFilterBarControlConfigurationExtension|TaxReportEnrichedSet": {
+              "className": "sap.ui.core.Fragment",
+              "fragmentName": "yatl01.reportecolumnasdinamicas.ext.fragment.TaxTypeFilter",
+              "type": "XML"
+            }
+          }
         },
-        {
-          "pattern": "TaxReportEnriched({key})/Set({key2}):?query:",
-          "name": "TaxReportEnrichedObjectPage",
-          "target": "TaxReportEnrichedObjectPage"
-        }
-      ],
-      "targets": {
-        "TaxReportEnrichedList": {
-          "type": "Component",
-          "id": "TaxReportEnrichedList",
-          "name": "sap.fe.templates.ListReport",
-          "options": {
-            "settings": {
-              "contextPath": "/TaxReportEnriched/Set",
-              "variantManagement": "Page",
-              "navigation": {
-                "TaxReportEnriched": {
-                  "detail": {
-                    "route": "TaxReportEnrichedObjectPage"
-                  }
-                }
-              },
-              "controlConfiguration": {
-                "@com.sap.vocabularies.UI.v1.LineItem": {
-                  "tableSettings": {
-                    "type": "ResponsiveTable"
-                  },
-                  "actions": {
-                    "exportPdf": {
-                      "press": ".extension.yatl01.reportecolumnasdinamicas.ext.controller.TaxReportEnrichedListExtension.onExportPdf",
-                      "visible": true,
-                      "enabled": true,
-                      "text": "{i18n>pdfButtonText}"
-                    }
+        "sap.ui.controllerExtensions": {
+          "sap.suite.ui.generic.template.ListReport.view.ListReport": {
+            "controllerName": "yatl01.reportecolumnasdinamicas.ext.controller.TaxReportEnrichedListExtension",
+            "sap.ui.generic.app": {
+              "TaxReportEnrichedSet": {
+                "EntitySet": "TaxReportEnrichedSet",
+                "Actions": {
+                  "exportPdf": {
+                    "id": "exportPdfButton",
+                    "text": "{i18n>pdfButtonText}",
+                    "press": "onExportPdf",
+                    "requiresSelection": false
                   }
                 }
               }
             }
           }
-        },
-        "TaxReportEnrichedObjectPage": {
-          "type": "Component",
-          "id": "TaxReportEnrichedObjectPage",
-          "name": "sap.fe.templates.ObjectPage",
-          "options": {
-            "settings": {
-              "editableHeaderContent": false,
-              "contextPath": "/TaxReportEnriched/Set"
+        }
+      }
+    },
+    "resources": {
+      "css": []
+    }
+  },
+  "sap.ui.generic.app": {
+    "_version": "1.3.0",
+    "settings": {
+      "forceGlobalRefresh": false,
+      "objectPageHeaderType": "Dynamic",
+      "considerAnalyticalParameters": true,
+      "showDraftToggle": false
+    },
+    "pages": {
+      "ListReport|TaxReportEnrichedSet": {
+        "entitySet": "TaxReportEnrichedSet",
+        "component": {
+          "name": "sap.suite.ui.generic.template.ListReport",
+          "list": true,
+          "settings": {
+            "smartVariantManagement": true,
+            "variantManagementHidden": false,
+            "tableSettings": {
+              "type": "ResponsiveTable"
             }
           }
         }
@@ -177,10 +165,5 @@
   "sap.fiori": {
     "registrationIds": [],
     "archeType": "transactional"
-  },
-  "sap.fe": {
-    "app": {
-      "enableLazyLoading": true
-    }
   }
 }

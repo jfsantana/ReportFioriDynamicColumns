@@ -1,7 +1,10 @@
 [
-    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "01", "DescripcionGrup": "Gasolina", "FieldName": "C1" },
-    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "02", "DescripcionGrup": "Parrilla", "FieldName": "C2" },
-    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "03", "DescripcionGrup": "Comida", "FieldName": "C3" },
-    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "04", "DescripcionGrup": "Bebida", "FieldName": "C4" },
-    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "05", "DescripcionGrup": "Otros", "FieldName": "C5" }
+    {"Sociedad": "10GT", "Taxc": "V1", "Grup": "1", "DescripcionGrup": "Gasolina", "FieldName": "c1", "TaxType": "V"},
+    {"Sociedad": "10GT", "Taxc": "V2", "Grup": "1", "DescripcionGrup": "Gasolina", "FieldName": "c1", "TaxType": "A"},
+    {"Sociedad": "10GT", "Taxc": "V3", "Grup": "3", "DescripcionGrup": "Parrilla", "FieldName": "c3", "TaxType": "V"},
+    {"Sociedad": "10GT", "Taxc": "V4", "Grup": "4", "DescripcionGrup": "Comida", "FieldName": "c4", "TaxType": "V"},
+    {"Sociedad": "10GT", "Taxc": "V5", "Grup": "5", "DescripcionGrup": "Bebida", "FieldName": "c5", "TaxType": "V"},
+    {"Sociedad": "10GT", "Taxc": "V6", "Grup": "6", "DescripcionGrup": "Snack", "FieldName": "c6", "TaxType": "V"},
+    {"Sociedad": "10GT", "Taxc": "V7", "Grup": "7", "DescripcionGrup": "Sport", "FieldName": "c7", "TaxType": "V"},
+    {"Sociedad": "11GT", "Taxc": "VI", "Grup": "1", "DescripcionGrup": "COMPRAS DE BIENES LOCALES", "FieldName": "C1", "TaxType": "V"}
 ]

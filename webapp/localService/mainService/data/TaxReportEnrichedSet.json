@@ -1,0 +1,7 @@
+[
+    {"P_CompanyCode": "10GT", "P_FiscalYear": "2026", "AccountingDocument": "700000000", "TransactionCurrency": "GTQ", "c1": "0.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00", "c6": "0.00", "c7": "0.00", "c8": "0.00", "c9": "0.00"},
+    {"P_CompanyCode": "10GT", "P_FiscalYear": "2026", "AccountingDocument": "700000002", "TransactionCurrency": "GTQ", "c1": "26.79", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00", "c6": "0.00", "c7": "0.00", "c8": "0.00", "c9": "0.00"},
+    {"P_CompanyCode": "10GT", "P_FiscalYear": "2026", "AccountingDocument": "700000003", "TransactionCurrency": "GTQ", "c1": "1071.43", "c2": "52.00", "c3": "0.00", "c4": "0.00", "c5": "0.00", "c6": "0.00", "c7": "0.00", "c8": "0.00", "c9": "0.00"},
+    {"P_CompanyCode": "10GT", "P_FiscalYear": "2026", "AccountingDocument": "900000001", "TransactionCurrency": "GTQ", "c1": "310.50", "c2": "12.00", "c3": "0.00", "c4": "0.00", "c5": "0.00", "c6": "0.00", "c7": "0.00", "c8": "0.00", "c9": "0.00"},
+    {"P_CompanyCode": "10GT", "P_FiscalYear": "2026", "AccountingDocument": "900000002", "TransactionCurrency": "GTQ", "c1": "0.00", "c2": "845.25", "c3": "0.00", "c4": "0.00", "c5": "0.00", "c6": "0.00", "c7": "0.00", "c8": "0.00", "c9": "0.00"}
+]

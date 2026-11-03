@@ -1,0 +1,4 @@
+[
+    {"TaxType": "V", "TaxType_Text": "Input tax"},
+    {"TaxType": "A", "TaxType_Text": "Output tax"}
+]
