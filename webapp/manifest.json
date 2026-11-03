@@ -146,6 +146,14 @@
                 "@com.sap.vocabularies.UI.v1.LineItem": {
                   "tableSettings": {
                     "type": "ResponsiveTable"
+                  },
+                  "actions": {
+                    "exportPdf": {
+                      "press": ".extension.yatl01.reportecolumnasdinamicas.ext.controller.TaxReportEnrichedListExtension.onExportPdf",
+                      "visible": true,
+                      "enabled": true,
+                      "text": "{i18n>pdfButtonText}"
+                    }
                   }
                 }
               }

@@ -1,0 +1,14 @@
+[
+    { "AccountingDocument": "700000000", "TransactionCurrency": "GTQ", "c1": "0.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "700000002", "TransactionCurrency": "GTQ", "c1": "26.79", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "700000003", "TransactionCurrency": "GTQ", "c1": "1071.43", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "700000004", "TransactionCurrency": "GTQ", "c1": "2035.71", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "700000005", "TransactionCurrency": "GTQ", "c1": "1071.43", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1300000001", "TransactionCurrency": "GTQ", "c1": "12.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1300000002", "TransactionCurrency": "GTQ", "c1": "24.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1300000003", "TransactionCurrency": "GTQ", "c1": "36.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1700000000", "TransactionCurrency": "GTQ", "c1": "-535.71", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1800000000", "TransactionCurrency": "GTQ", "c1": "0.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1800000001", "TransactionCurrency": "GTQ", "c1": "0.00", "c2": "0.00", "c3": "0.00", "c4": "0.00", "c5": "0.00" },
+    { "AccountingDocument": "1900000000", "TransactionCurrency": "GTQ", "c1": "535.71", "c2": "150.25", "c3": "89.99", "c4": "12.50", "c5": "0.00" }
+]

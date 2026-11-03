@@ -1,0 +1,7 @@
+[
+    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "01", "DescripcionGrup": "Gasolina", "FieldName": "C1" },
+    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "02", "DescripcionGrup": "Parrilla", "FieldName": "C2" },
+    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "03", "DescripcionGrup": "Comida", "FieldName": "C3" },
+    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "04", "DescripcionGrup": "Bebida", "FieldName": "C4" },
+    { "Sociedad": "10GT", "Taxc": "IVA", "Grup": "05", "DescripcionGrup": "Otros", "FieldName": "C5" }
+]
