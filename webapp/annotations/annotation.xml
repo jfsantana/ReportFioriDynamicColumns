@@ -21,10 +21,21 @@
                      obligatorios del servicio (considerAnalyticalParameters),
                      por eso NO se listan en UI.SelectionFields: duplicaria
                      los campos. El Tipo de Impuesto es siempre V (sin filtro).
-                     Unico filtro opcional visible: Nº Documento. -->
+                     Filtros opcionales (en este orden): Nº Documento,
+                     Periodo fiscal (FiscalPeriod), Fecha de documento
+                     (DocumentDate = "Journal Entry Date"), Fecha de
+                     contabilizacion, Proveedor y Clase de documento
+                     (AccountingDocumentType = "Journal Entry Type").
+                     PENDIENTE: Tax Code no existe en el servicio (la vista
+                     ENRICHED agrupa por documento y no expone TaxCode). -->
                 <Annotation Term="UI.SelectionFields">
                     <Collection>
                         <PropertyPath>AccountingDocument</PropertyPath>
+                        <PropertyPath>FiscalPeriod</PropertyPath>
+                        <PropertyPath>DocumentDate</PropertyPath>
+                        <PropertyPath>PostingDate</PropertyPath>
+                        <PropertyPath>Supplier</PropertyPath>
+                        <PropertyPath>AccountingDocumentType</PropertyPath>
                     </Collection>
                 </Annotation>
 

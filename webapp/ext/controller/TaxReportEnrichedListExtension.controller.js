@@ -338,6 +338,27 @@ sap.ui.define([
         });
     }
 
+    /**
+     * Excluye las columnas indicadas de la tabla y de la personalizacion
+     * (SmartTable.deactivateColumns, API publica desde UI5 1.54). Solo se
+     * invoca si la lista cambio, porque esta funcion se ejecuta en cada
+     * redibujado de la tabla.
+     */
+    function syncDeactivatedColumns(oSmartTable, aKeys) {
+        if (typeof oSmartTable.deactivateColumns !== "function") {
+            return;
+        }
+        var aCurrent = oSmartTable.getDeactivatedColumns ? oSmartTable.getDeactivatedColumns() : [];
+        if (aCurrent.slice().sort().join(",") === aKeys.slice().sort().join(",")) {
+            return;
+        }
+        try {
+            oSmartTable.deactivateColumns(aKeys);
+        } catch (oError) {
+            console.warn("[TaxReport] No se pudieron desactivar las columnas sin mapear", oError);
+        }
+    }
+
     /** Asigna el encabezado dinamico a cada columna cN con descripcion. */
     function applyColumnNames() {
         var oSmartTable = getSmartTable();
@@ -347,6 +368,20 @@ sap.ui.define([
         }
         var oInner = oSmartTable.getTable && oSmartTable.getTable();
         var aColumns = oInner && oInner.getColumns ? oInner.getColumns() : [];
+
+        // Las columnas C01..C99 sin mapeo NO deben verse en ningun lado: se
+        // desactivan en la SmartTable (quedan fuera de la tabla y de todos los
+        // paneles de "Configuracion": columnas, orden, filtro, grupo).
+        // Debe hacerse ANTES de reactivar columnas ya mapeadas.
+        var aUnmappedKeys = [];
+        aColumns.forEach(function (oCol) {
+            var sColKey = getColumnKey(oCol);
+            if (/^c\d+$/i.test(sColKey) && !mMap[sColKey.toLowerCase()]) {
+                aUnmappedKeys.push(sColKey);
+            }
+        });
+        syncDeactivatedColumns(oSmartTable, aUnmappedKeys);
+
         aColumns.forEach(function (oCol) {
             var sKey = getColumnKey(oCol).toLowerCase();
             var sDesc = mMap[sKey];
@@ -451,23 +486,27 @@ sap.ui.define([
      */
     function applyFilterItems() {
         var oFilterBar = getFilterBar();
-        var mMap = oState.mParametrosMap;
-        if (!oFilterBar || !mMap) {
+        if (!oFilterBar) {
             return;
         }
+        // Mientras TablaParametros no se haya leido, se asume que ningun campo
+        // esta mapeado: las C01..C99 quedan ocultas desde el arranque.
+        var bMapLoaded = !!oState.mParametrosMap;
+        var mMap = oState.mParametrosMap || {};
         // Un item oculto deja de aparecer en getAllFilterItems: se guardan
-        // las referencias la primera vez para poder volver a mostrarlos.
+        // las referencias para poder volver a mostrarlos. Se revisa en cada
+        // llamada porque los items pueden crearse despues del primer intento.
         if (!oState.mFilterItems) {
             oState.mFilterItems = {};
-            oFilterBar.getAllFilterItems(false).forEach(function (oItem) {
-                var sName = oItem.getName();
-                if (/^c\d+$/i.test(sName)) {
-                    oState.mFilterItems[sName.toLowerCase()] = oItem;
-                } else if (sName === "P_CompanyCode" || sName === "P_FiscalYear") {
-                    oItem.setVisible(false);
-                }
-            });
         }
+        oFilterBar.getAllFilterItems(false).forEach(function (oItem) {
+            var sName = oItem.getName();
+            if (/^c\d+$/i.test(sName)) {
+                oState.mFilterItems[sName.toLowerCase()] = oItem;
+            } else if (sName === "P_CompanyCode" || sName === "P_FiscalYear") {
+                oItem.setVisible(false);
+            }
+        });
         Object.keys(oState.mFilterItems).forEach(function (sKey) {
             var oItem = oState.mFilterItems[sKey];
             var sDesc = mMap[sKey];
@@ -477,8 +516,10 @@ sap.ui.define([
             } else if (oItem.getVisible()) {
                 // Si el usuario habia filtrado por este campo, se limpia el
                 // valor para que no filtre en silencio algo que ya no se ve.
+                // Solo con el mapeo ya cargado: antes de eso el valor puede
+                // venir de una variante y el campo aun se va a mostrar.
                 var mData = oFilterBar.getFilterData() || {};
-                if (mData[oItem.getName()]) {
+                if (bMapLoaded && mData[oItem.getName()]) {
                     var mClear = {};
                     mClear[oItem.getName()] = null;
                     oFilterBar.setFilterData(mClear);
@@ -654,6 +695,16 @@ sap.ui.define([
         }
         oState.bFilterBarHooked = true;
         oFilterBar.attachSearch(showTable);
+        // Oculta de inmediato los campos C01..C99 (aun sin mapeo cargado) y
+        // reaplica al terminar la inicializacion / al cargar una variante.
+        applyFilterItems();
+        ["attachInitialized", "attachAfterVariantLoad"].forEach(function (sAttach) {
+            try {
+                oFilterBar[sAttach](applyFilterItems);
+            } catch (oError) {
+                console.warn("[TaxReport] SmartFilterBar sin " + sAttach, oError);
+            }
+        });
         oFilterBar.attachFilterChange(function () {
             hideResultsOnFilterChange();
             refreshForTaxType();
