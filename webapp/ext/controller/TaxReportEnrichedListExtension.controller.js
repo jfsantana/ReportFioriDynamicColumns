@@ -42,6 +42,13 @@ sap.ui.define([
 
     var FIXED_TAX_TYPE = "V";
 
+    // Campos de fecha del reporte y su formato visual (dd.mm.aaaa)
+    var DATE_FIELDS = ["DocumentDate", "PostingDate"];
+    var DATE_PATTERN = "dd.MM.yyyy";
+
+    // Clase CSS de la tabla (ver css/style.css): encabezados en azul
+    var TABLE_STYLE_CLASS = "taxReportTable";
+
     var oState = {
         oView: null,
         oFilterBar: null,
@@ -288,11 +295,6 @@ sap.ui.define([
         return String(sKey).trim();
     }
 
-    function getColumnHeaderText(oCol) {
-        var oHeader = oCol.getHeader && oCol.getHeader();
-        return oHeader && oHeader.getText ? oHeader.getText() : "";
-    }
-
     /**
      * Oculta la columna y la BLOQUEA: cualquier intento posterior de
      * mostrarla (redimensionar una columna, variantes, personalizacion)
@@ -507,6 +509,7 @@ sap.ui.define([
                 oItem.setVisible(false);
             }
         });
+        applyFilterDateFormat(oFilterBar);
         Object.keys(oState.mFilterItems).forEach(function (sKey) {
             var oItem = oState.mFilterItems[sKey];
             var sDesc = mMap[sKey];
@@ -566,6 +569,60 @@ sap.ui.define([
         }
         (oInner.getItems() || []).forEach(function (oItem) {
             fnHide(oItem.getCells());
+        });
+    }
+
+    /** Fecha como dd.mm.aaaa (las Edm.DateTime del servicio llegan como Date en UTC). */
+    function formatDateDDMMYYYY(oDate) {
+        if (!(oDate instanceof Date) || isNaN(oDate.getTime())) {
+            return "";
+        }
+        return ("0" + oDate.getUTCDate()).slice(-2) + "."
+            + ("0" + (oDate.getUTCMonth() + 1)).slice(-2) + "."
+            + oDate.getUTCFullYear();
+    }
+
+    /**
+     * Las columnas de fecha (DocumentDate / PostingDate) se muestran siempre
+     * como dd.mm.aaaa, sin depender del formato regional del navegador. Se
+     * cambia solo el texto de la celda: la columna sigue ligada a la fecha
+     * real, por lo que el orden y el filtro no se afectan.
+     */
+    function formatDateCells() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (!oInner) {
+            return;
+        }
+        var fnFormat = function (aCells) {
+            (aCells || []).forEach(function (oCell) {
+                var oInfo = oCell.getBindingInfo && oCell.getBindingInfo("text");
+                var oPart = oInfo && oInfo.parts && oInfo.parts[0];
+                if (oPart && DATE_FIELDS.indexOf(oPart.path) > -1 && oInfo.formatter !== formatDateDDMMYYYY) {
+                    oCell.bindText({ path: oPart.path, formatter: formatDateDDMMYYYY });
+                }
+            });
+        };
+        var oBindingInfo = oInner.getBindingInfo("items");
+        if (oBindingInfo && oBindingInfo.template) {
+            fnFormat(oBindingInfo.template.getCells());
+        }
+        (oInner.getItems() || []).forEach(function (oItem) {
+            fnFormat(oItem.getCells());
+        });
+    }
+
+    /** Los filtros de fecha tambien se escriben/muestran como dd.mm.aaaa. */
+    function applyFilterDateFormat(oFilterBar) {
+        DATE_FIELDS.forEach(function (sName) {
+            try {
+                var oControl = oFilterBar.determineControlByName && oFilterBar.determineControlByName(sName);
+                if (oControl && oControl.setDisplayFormat && oControl.getDisplayFormat() !== DATE_PATTERN) {
+                    oControl.setDisplayFormat(DATE_PATTERN);
+                }
+            } catch (oError) {
+                console.warn("[TaxReport] No se pudo dar formato al filtro " + sName, oError);
+            }
         });
     }
 
@@ -717,11 +774,13 @@ sap.ui.define([
             return;
         }
         oState.bTableHooked = true;
+        oSmartTable.addStyleClass(TABLE_STYLE_CLASS);
         disableColumnResize();
         var fnReapply = function () {
             applyReportTitle();
             applyColumnNames();
             hideCurrencyInAmountCells();
+            formatDateCells();
             disableColumnResize();
         };
         try {
@@ -786,32 +845,82 @@ sap.ui.define([
         return String(vValue);
     }
 
+    /** Fecha del registro como dd.mm.aaaa (respaldo si el servicio no trae DocumentDateFormatted). */
+    function formatDocumentDate(oRow) {
+        return oRow.DocumentDateFormatted
+            ? String(oRow.DocumentDateFormatted)
+            : formatDateDDMMYYYY(oRow.DocumentDate);
+    }
+
+    /** TIPO = descripcion del tipo de documento + " - " + codigo SAT (ej. "FACTURA - FACT"). */
+    function formatDocumentType(oRow) {
+        return [oRow.DescTipoDocumento, oRow.TipDocSat]
+            .map(function (sValue) { return String(sValue || "").trim(); })
+            .filter(Boolean)
+            .join(" - ");
+    }
+
+    /** Columnas C01..C99 mapeadas para el filtro actual, en orden numerico. */
+    function getMappedDynamicKeys() {
+        return Object.keys(oState.mParametrosMap || {})
+            .filter(function (sKey) { return /^c\d+$/i.test(sKey); })
+            .sort(function (a, b) { return parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10); });
+    }
+
     /**
-     * Columnas VISIBLES de la tabla (orden y encabezado actuales).
+     * Columnas del PDF: lista FIJA y en orden FIJO, independiente de las
+     * columnas que el usuario muestre u oculte en la tabla. Los importes
+     * dinamicos son los C01..C99 mapeados, entre PROVEEDOR e IVA. Todos los
+     * encabezados del PDF son azules (headStyles).
+     * Cada columna: header, value(oRow, iIndex) para texto o key + isAmount
+     * para importes, dynamic y select (campos OData).
      */
-    function getVisibleColumns(oSmartTable) {
-        var oInner = oSmartTable.getTable();
-        return (oInner.getColumns() || [])
-            .filter(function (oCol) {
-                return oCol.getVisible && oCol.getVisible();
-            })
-            .map(function (oCol) {
-                var sKey = getColumnKey(oCol);
-                return {
-                    key: sKey,
-                    header: getColumnHeaderText(oCol) || sKey,
-                    // Las columnas dinamicas C01..C15 son importes (Edm.Decimal)
-                    isAmount: /^c\d+$/i.test(sKey)
-                };
+    function getPdfColumns() {
+        var aColumns = [
+            { header: "#", value: function (oRow, iIndex) { return String(iIndex + 1); }, select: [] },
+            { header: "DÍA", value: formatDocumentDate, select: ["DocumentDateFormatted", "DocumentDate"] },
+            { header: "TIPO", value: formatDocumentType, select: ["DescTipoDocumento", "TipDocSat"] },
+            { header: "SERIE", key: "Serie" },
+            { header: "NO. DOCUMENTO", key: "DocumentReferenceID" },
+            { header: "NIT", key: "Nit" },
+            { header: "PROVEEDOR", key: "Proveedor", isTotalLabel: true }
+        ];
+        getMappedDynamicKeys().forEach(function (sKey) {
+            aColumns.push({
+                header: oState.mParametrosMap[sKey],
+                key: sKey.toUpperCase(),
+                isAmount: true,
+                dynamic: true
             });
+        });
+        aColumns.push(
+            { header: "IVA", key: "ImporteIVA", isAmount: true },
+            { header: "TOTAL", key: "Total", isAmount: true },
+            { header: "No. PROVEEDOR", key: "NoProveedor" },
+            { header: "Nro. Documento FI", key: "AccountingDocument" }
+        );
+        return aColumns.map(function (oCol) {
+            oCol.isAmount = !!oCol.isAmount;
+            oCol.dynamic = !!oCol.dynamic;
+            oCol.select = oCol.select || [oCol.key];
+            return oCol;
+        });
+    }
+
+    /** Valor ya formateado de una columna del PDF para una fila. */
+    function getPdfCellValue(oCol, oRow, iIndex) {
+        return oCol.value
+            ? oCol.value(oRow, iIndex)
+            : formatCellValue(oRow[oCol.key], oCol.isAmount);
     }
 
     /**
      * Pide TODAS las filas que coinciden con los filtros actuales
      * (no solo las que muestra la tabla con paginacion), reutilizando la
-     * ruta, filtros y orden del binding de la tabla.
+     * ruta, filtros y orden del binding de la tabla. El $select se arma con
+     * los campos del PDF (no con las columnas visibles de la tabla).
      */
-    function requestAllRows(oSmartTable) {
+    function requestAllRows(oSmartTable, aSelect) {
         var oInner = oSmartTable.getTable();
         var oInfo = oInner.getBindingInfo("items") || oInner.getBindingInfo("rows");
         var oModel = oSmartTable.getModel();
@@ -821,9 +930,8 @@ sap.ui.define([
         var aSorters = oInfo.sorter ? [].concat(oInfo.sorter) : [];
         var aFilters = oInfo.filters ? [].concat(oInfo.filters) : [];
         var mUrlParameters = {};
-        var sSelect = oInfo.parameters && oInfo.parameters.select;
-        if (sSelect) {
-            mUrlParameters.$select = sSelect;
+        if (aSelect && aSelect.length) {
+            mUrlParameters.$select = aSelect.join(",");
         }
         return new Promise(function (fnResolve, fnReject) {
             oModel.read(oInfo.path, {
@@ -843,12 +951,20 @@ sap.ui.define([
         if (!oSmartTable) {
             return Promise.reject(new Error("No se encontro la tabla del reporte"));
         }
-        var aColumns = getVisibleColumns(oSmartTable);
+        var aColumns = getPdfColumns();
+        var aSelect = ["CompanyCodeCurrency"];
+        aColumns.forEach(function (oCol) {
+            oCol.select.forEach(function (sField) {
+                if (aSelect.indexOf(sField) === -1) {
+                    aSelect.push(sField);
+                }
+            });
+        });
 
-        return requestAllRows(oSmartTable).then(function (aRawRows) {
-            var aRows = aRawRows.map(function (oRow) {
+        return requestAllRows(oSmartTable, aSelect).then(function (aRawRows) {
+            var aRows = aRawRows.map(function (oRow, iIndex) {
                 return aColumns.map(function (oCol) {
-                    return formatCellValue(oRow[oCol.key], oCol.isAmount);
+                    return getPdfCellValue(oCol, oRow, iIndex);
                 });
             });
             return {
@@ -900,7 +1016,8 @@ sap.ui.define([
             if (oCol.isAmount) {
                 return getAmountFormatter().format(aTotals[iIndex]);
             }
-            return iIndex === 0 ? "Total" : "";
+            // La etiqueta "TOTAL" va en la columna PROVEEDOR
+            return oCol.isTotalLabel ? "TOTAL" : "";
         })];
     }
 
@@ -1027,6 +1144,7 @@ sap.ui.define([
                 showTable();
                 hookSmartTable(oSmartTable);
                 hideCurrencyInAmountCells();
+                formatDateCells();
                 if (guardRebind(oSmartTable, mBindingParams)) {
                     return;
                 }

@@ -57,14 +57,32 @@
                 <!-- TABLA: Columnas del reporte (C01..C15 se renombran dinamicamente) -->
                 <Annotation Term="UI.LineItem">
                     <Collection>
+                        <!-- Orden del Libro de Compras (el "#" correlativo solo existe en el PDF) -->
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="AccountingDocument"/>
-                            <PropertyValue Property="Label" String="Nº Documento"/>
+                            <PropertyValue Property="Value" Path="DocumentDate"/>
+                            <PropertyValue Property="Label" String="DÍA"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="CompanyCodeCurrency"/>
-                            <PropertyValue Property="Label" String="Moneda"/>
+                            <PropertyValue Property="Value" Path="TipDocSat"/>
+                            <PropertyValue Property="Label" String="TIPO"/>
                         </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="Serie"/>
+                            <PropertyValue Property="Label" String="SERIE"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="DocumentReferenceID"/>
+                            <PropertyValue Property="Label" String="NO. DOCUMENTO"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="Nit"/>
+                            <PropertyValue Property="Label" String="NIT"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="Proveedor"/>
+                            <PropertyValue Property="Label" String="PROVEEDOR"/>
+                        </Record>
+                        <!-- Columnas dinamicas (se renombran/ocultan segun TablaParametros) -->
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="C01"/>
                             <PropertyValue Property="Label" String="C01"/>
@@ -125,6 +143,22 @@
                             <PropertyValue Property="Value" Path="C15"/>
                             <PropertyValue Property="Label" String="C15"/>
                         </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="ImporteIVA"/>
+                            <PropertyValue Property="Label" String="IVA"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="Total"/>
+                            <PropertyValue Property="Label" String="TOTAL"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="NoProveedor"/>
+                            <PropertyValue Property="Label" String="No. PROVEEDOR"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="AccountingDocument"/>
+                            <PropertyValue Property="Label" String="Nro. Documento FI"/>
+                        </Record>
                     </Collection>
                 </Annotation>
             </Annotations>
@@ -132,6 +166,13 @@
             <!-- Etiqueta del filtro/columna Nº Documento -->
             <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/AccountingDocument">
                 <Annotation Term="Common.Label" String="Nº Documento"/>
+            </Annotations>
+
+            <!-- TIPO: muestra el codigo SAT con su descripcion ("FACTURA (FACT)") -->
+            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/TipDocSat">
+                <Annotation Term="Common.Text" Path="DescTipoDocumento">
+                    <Annotation Term="UI.TextArrangement" EnumMember="UI.TextArrangementType/TextFirst"/>
+                </Annotation>
             </Annotations>
 
             <!-- Las copias "normales" de los parametros (columnas clave de la

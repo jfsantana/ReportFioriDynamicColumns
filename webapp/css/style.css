@@ -1,0 +1,16 @@
+/* Encabezados de la tabla del reporte en azul (mismo azul que el PDF: #0A6ED1).
+   La clase taxReportTable la agrega el controller a la SmartTable. */
+.taxReportTable .sapMListTblHeader > th,
+.taxReportTable .sapMListTblHeader > .sapMListTblCell {
+    background-color: #0a6ed1 !important;
+    border-bottom-color: #0854a0 !important;
+}
+
+.taxReportTable .sapMListTblHeader .sapMLabel,
+.taxReportTable .sapMListTblHeader .sapMText,
+.taxReportTable .sapMListTblHeader .sapMColumnHeader,
+.taxReportTable .sapMListTblHeader .sapMColumnHeader .sapUiIcon,
+.taxReportTable .sapMListTblHeader .sapMListTblCell .sapUiIcon {
+    color: #ffffff !important;
+    font-weight: bold;
+}

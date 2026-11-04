@@ -125,7 +125,11 @@
       }
     },
     "resources": {
-      "css": []
+      "css": [
+        {
+          "uri": "css/style.css"
+        }
+      ]
     }
   },
   "sap.ui.generic.app": {
