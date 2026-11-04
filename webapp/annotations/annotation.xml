@@ -20,8 +20,7 @@
                 <!-- FILTROS: Sociedad y Ejercicio ya salen como parametros
                      obligatorios del servicio (considerAnalyticalParameters),
                      por eso NO se listan en UI.SelectionFields: duplicaria
-                     los campos. El Tipo de Impuesto es un filtro propio de
-                     la app (ext/fragment/TaxTypeFilter).
+                     los campos. El Tipo de Impuesto es siempre V (sin filtro).
                      Unico filtro opcional visible: Nº Documento. -->
                 <Annotation Term="UI.SelectionFields">
                     <Collection>
@@ -44,7 +43,7 @@
                     </Record>
                 </Annotation>
 
-                <!-- TABLA: Columnas del reporte (c1..c9 se renombran dinamicamente) -->
+                <!-- TABLA: Columnas del reporte (C01..C15 se renombran dinamicamente) -->
                 <Annotation Term="UI.LineItem">
                     <Collection>
                         <Record Type="UI.DataField">
@@ -52,44 +51,68 @@
                             <PropertyValue Property="Label" String="Nº Documento"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="TransactionCurrency"/>
+                            <PropertyValue Property="Value" Path="CompanyCodeCurrency"/>
                             <PropertyValue Property="Label" String="Moneda"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c1"/>
-                            <PropertyValue Property="Label" String="C1"/>
+                            <PropertyValue Property="Value" Path="C01"/>
+                            <PropertyValue Property="Label" String="C01"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c2"/>
-                            <PropertyValue Property="Label" String="C2"/>
+                            <PropertyValue Property="Value" Path="C02"/>
+                            <PropertyValue Property="Label" String="C02"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c3"/>
-                            <PropertyValue Property="Label" String="C3"/>
+                            <PropertyValue Property="Value" Path="C03"/>
+                            <PropertyValue Property="Label" String="C03"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c4"/>
-                            <PropertyValue Property="Label" String="C4"/>
+                            <PropertyValue Property="Value" Path="C04"/>
+                            <PropertyValue Property="Label" String="C04"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c5"/>
-                            <PropertyValue Property="Label" String="C5"/>
+                            <PropertyValue Property="Value" Path="C05"/>
+                            <PropertyValue Property="Label" String="C05"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c6"/>
-                            <PropertyValue Property="Label" String="C6"/>
+                            <PropertyValue Property="Value" Path="C06"/>
+                            <PropertyValue Property="Label" String="C06"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c7"/>
-                            <PropertyValue Property="Label" String="C7"/>
+                            <PropertyValue Property="Value" Path="C07"/>
+                            <PropertyValue Property="Label" String="C07"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c8"/>
-                            <PropertyValue Property="Label" String="C8"/>
+                            <PropertyValue Property="Value" Path="C08"/>
+                            <PropertyValue Property="Label" String="C08"/>
                         </Record>
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="c9"/>
-                            <PropertyValue Property="Label" String="C9"/>
+                            <PropertyValue Property="Value" Path="C09"/>
+                            <PropertyValue Property="Label" String="C09"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="C10"/>
+                            <PropertyValue Property="Label" String="C10"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="C11"/>
+                            <PropertyValue Property="Label" String="C11"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="C12"/>
+                            <PropertyValue Property="Label" String="C12"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="C13"/>
+                            <PropertyValue Property="Label" String="C13"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="C14"/>
+                            <PropertyValue Property="Label" String="C14"/>
+                        </Record>
+                        <Record Type="UI.DataField">
+                            <PropertyValue Property="Value" Path="C15"/>
+                            <PropertyValue Property="Label" String="C15"/>
                         </Record>
                     </Collection>
                 </Annotation>

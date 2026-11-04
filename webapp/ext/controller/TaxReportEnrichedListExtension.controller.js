@@ -13,13 +13,12 @@ sap.ui.define([
      * (sap.suite.ui.generic.template.ListReport.view.ListReport).
      *
      * Responsabilidades:
-     *  - Filtro "Tipo de Impuesto": V = Input Tax, A = Output Tax. Es un
-     *    campo personalizado de la app (ext/fragment/TaxTypeFilter), NO un
-     *    parametro del servicio; su lista sale de I_TaxType.
-     *  - Renombrar las columnas dinamicas c1..c9 con TablaParametros,
+     *  - Tipo de Impuesto fijo: SIEMPRE V (Input Tax). No hay filtro en
+     *    pantalla; el valor solo selecciona las filas de TablaParametros.
+     *  - Renombrar las columnas dinamicas C01..C15 con TablaParametros,
      *    usando solo las filas de la Sociedad y del Tipo de Impuesto
      *    seleccionados, y OCULTAR las columnas cN que no tengan fila.
-     *  - Renombrar tambien los CAMPOS DE FILTRO c1..c9 (barra de filtros y
+     *  - Renombrar tambien los CAMPOS DE FILTRO C01..C15 (barra de filtros y
      *    "Adaptar filtros") y ocultar los que no tengan parametro.
      *  - La tabla permanece oculta hasta que se pulsa "Go", y se vuelve a
      *    ocultar apenas el usuario cambia cualquier filtro.
@@ -41,6 +40,8 @@ sap.ui.define([
 
     var PDF_LIB_PATH = "yatl01/reportecolumnasdinamicas/ext/lib/";
 
+    var FIXED_TAX_TYPE = "V";
+
     var oState = {
         oView: null,
         oFilterBar: null,
@@ -51,8 +52,7 @@ sap.ui.define([
         mHiddenByUs: {},         // columnas cN ocultadas por esta extension
         sTaxType: "",            // "V" | "A" | ""
         sCompany: "",            // sociedad del filtro (P_CompanyCode)
-        oTaxTypeSelect: null,    // selector personalizado de Tipo de Impuesto
-        mFilterItems: null,      // campos de filtro c1..c9 (SmartFilterBar)
+        mFilterItems: null,      // campos de filtro C01..C15 (SmartFilterBar)
         bFilterBarHooked: false,
         bSearched: false,        // true despues del primer "Go"
         mParametrosMap: null,    // fieldname(lowercase) -> descripcion
@@ -164,36 +164,9 @@ sap.ui.define([
         }
     }
 
-    /**
-     * Selector personalizado "Tipo de Impuesto" (fragmento TaxTypeFilter).
-     * Al cambiar su valor se recalculan nombres, columnas visibles y
-     * titulo de inmediato (no requiere volver a consultar el servicio).
-     */
-    function getTaxTypeSelect() {
-        if (oState.oTaxTypeSelect) {
-            return oState.oTaxTypeSelect;
-        }
-        var oView = oState.oView;
-        if (!oView) {
-            return null;
-        }
-        var aFound = oView.findAggregatedObjects(true, function (oControl) {
-            return oControl.isA && oControl.isA("sap.m.Select")
-                && /taxTypeSelect$/.test(oControl.getId());
-        });
-        if (aFound.length) {
-            oState.oTaxTypeSelect = aFound[0];
-            oState.oTaxTypeSelect.attachChange(function () {
-                hideResultsOnFilterChange();
-                refreshForTaxType();
-            });
-        }
-        return oState.oTaxTypeSelect;
-    }
-
+    /** El reporte trabaja SIEMPRE con Input Tax (V): no hay filtro de Tipo de Impuesto. */
     function getTaxTypeValue() {
-        var oSelect = getTaxTypeSelect();
-        return oSelect ? String(oSelect.getSelectedKey() || "") : "";
+        return FIXED_TAX_TYPE;
     }
 
     function getAmountFormatter() {
@@ -297,7 +270,7 @@ sap.ui.define([
         return "";
     }
 
-    /** Clave de columna (c1, c2, ...) de una sap.m.Column de la SmartTable. */
+    /** Clave de columna (C01, C02, ...) de una sap.m.Column de la SmartTable. */
     function getColumnKey(oCol) {
         var vData = oCol.data ? oCol.data("p13nData") : null;
         if (typeof vData === "string") {
@@ -378,9 +351,9 @@ sap.ui.define([
             var sKey = getColumnKey(oCol).toLowerCase();
             var sDesc = mMap[sKey];
 
-            // Columnas dinamicas (c1..c9): sin fila en TablaParametros para el
+            // Columnas dinamicas (C01..C15): sin fila en TablaParametros para el
             // filtro actual -> no deben aparecer.
-            if (/^c\d+$/.test(sKey)) {
+            if (/^c\d+$/i.test(sKey)) {
                 if (!sDesc) {
                     if (oCol.getVisible()) {
                         oState.mHiddenByUs[sKey] = true;
@@ -463,7 +436,7 @@ sap.ui.define([
         var aSelect = String(oParams.select).split(",");
         oSmartTable.getTable().getColumns().forEach(function (oCol) {
             var sKey = getColumnKey(oCol);
-            if (/^c\d+$/.test(sKey) && aSelect.indexOf(sKey) === -1) {
+            if (/^c\d+$/i.test(sKey) && aSelect.indexOf(sKey) === -1) {
                 aSelect.push(sKey);
             }
         });
@@ -471,7 +444,7 @@ sap.ui.define([
     }
 
     /**
-     * Renombra los campos de filtro c1..c9 con la descripcion de
+     * Renombra los campos de filtro C01..C15 con la descripcion de
      * TablaParametros y oculta los que no tienen parametro para el Tipo de
      * Impuesto / Sociedad actuales (tambien en "Adaptar filtros"). Tambien
      * oculta las copias duplicadas de Sociedad y Ejercicio.
@@ -516,7 +489,7 @@ sap.ui.define([
     }
 
     /**
-     * Los importes (c1..c9) llevan la unidad TransactionCurrency en el
+     * Los importes (C01..C15) llevan la unidad CompanyCodeCurrency en el
      * metadata, por lo que la tabla dibuja "valor + moneda" (un HBox con dos
      * textos). Se oculta el texto de la moneda, tanto en las filas ya
      * creadas como en la plantilla (para las que se creen al consultar).
@@ -539,7 +512,7 @@ sap.ui.define([
                 var oUnit = aItems[1];
                 var oInfo = oUnit.getBindingInfo && oUnit.getBindingInfo("text");
                 var bIsCurrency = oInfo && oInfo.parts && oInfo.parts.some(function (oPart) {
-                    return oPart.path === "TransactionCurrency";
+                    return oPart.path === "CompanyCodeCurrency";
                 });
                 if (bIsCurrency && oUnit.getVisible()) {
                     oUnit.setVisible(false);
@@ -562,7 +535,7 @@ sap.ui.define([
     /** Hay al menos una columna dinamica (cN) mapeada en el mapa. */
     function hasMappedColumns(mMap) {
         return Object.keys(mMap || {}).some(function (sKey) {
-            return /^c\d+$/.test(sKey);
+            return /^c\d+$/i.test(sKey);
         });
     }
 
@@ -776,7 +749,7 @@ sap.ui.define([
                 return {
                     key: sKey,
                     header: getColumnHeaderText(oCol) || sKey,
-                    // Las columnas dinamicas c1..cN son importes (Edm.Decimal)
+                    // Las columnas dinamicas C01..C15 son importes (Edm.Decimal)
                     isAmount: /^c\d+$/i.test(sKey)
                 };
             });
@@ -851,8 +824,8 @@ sap.ui.define([
         }
         var mCurrencies = {};
         oData.rawRows.forEach(function (oRow) {
-            if (oRow && oRow.TransactionCurrency) {
-                mCurrencies[oRow.TransactionCurrency] = true;
+            if (oRow && oRow.CompanyCodeCurrency) {
+                mCurrencies[oRow.CompanyCodeCurrency] = true;
             }
         });
         var aCurrencies = Object.keys(mCurrencies);
@@ -985,7 +958,6 @@ sap.ui.define([
              */
             onInitSmartFilterBarExtension: function (oEvent) {
                 rememberControls(this, oEvent && oEvent.getSource ? oEvent.getSource() : null);
-                getTaxTypeSelect();
                 hookFilterBar();
                 hideTableUntilSearch();
                 // Deja listos los nombres de los filtros desde la carga inicial

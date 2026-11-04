@@ -104,15 +104,6 @@
     },
     "extends": {
       "extensions": {
-        "sap.ui.viewExtensions": {
-          "sap.suite.ui.generic.template.ListReport.view.ListReport": {
-            "SmartFilterBarControlConfigurationExtension|TaxReportEnrichedSet": {
-              "className": "sap.ui.core.Fragment",
-              "fragmentName": "yatl01.reportecolumnasdinamicas.ext.fragment.TaxTypeFilter",
-              "type": "XML"
-            }
-          }
-        },
         "sap.ui.controllerExtensions": {
           "sap.suite.ui.generic.template.ListReport.view.ListReport": {
             "controllerName": "yatl01.reportecolumnasdinamicas.ext.controller.TaxReportEnrichedListExtension",

@@ -27,21 +27,32 @@
                 <Key>
                     <PropertyRef Name="P_CompanyCode"/>
                     <PropertyRef Name="P_FiscalYear"/>
+                    <PropertyRef Name="CompanyCode"/>
                     <PropertyRef Name="AccountingDocument"/>
+                    <PropertyRef Name="FiscalYear"/>
                 </Key>
                 <Property Name="P_CompanyCode" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="UpperCase" sap:label="Company Code"/>
                 <Property Name="P_FiscalYear" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="NonNegative" sap:label="Fiscal Year"/>
+                <Property Name="CompanyCode" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="UpperCase" sap:label="Company Code"/>
                 <Property Name="AccountingDocument" Type="Edm.String" Nullable="false" MaxLength="10" sap:display-format="UpperCase" sap:label="Document Number"/>
+                <Property Name="FiscalYear" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="NonNegative" sap:label="Fiscal Year"/>
+                <Property Name="CompanyCodeCurrency" Type="Edm.String" MaxLength="5" sap:display-format="UpperCase" sap:label="CompanyCode Currency" sap:semantics="currency-code"/>
                 <Property Name="TransactionCurrency" Type="Edm.String" MaxLength="5" sap:display-format="UpperCase" sap:label="Currency" sap:semantics="currency-code"/>
-                <Property Name="c1" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c2" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c3" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c4" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c5" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c6" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c7" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c8" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
-                <Property Name="c9" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="TransactionCurrency" sap:variable-scale="true"/>
+                <Property Name="C01" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C02" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C03" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C04" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C05" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C06" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C07" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C08" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C09" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C10" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C11" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C12" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C13" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C14" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
+                <Property Name="C15" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
                 <NavigationProperty Name="Parameters" Relationship="cds_ymqaf_sd_taxrpt_enriched.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" FromRole="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" ToRole="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" sap:filterable="false"/>
             </EntityType>
             <EntityType Name="TaxReportEnrichedParameters" sap:semantics="parameters" sap:content-version="1">
