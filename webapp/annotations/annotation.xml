@@ -42,9 +42,9 @@
                 <Annotation Term="UI.HeaderInfo">
                     <Record Type="UI.HeaderInfoType">
                         <PropertyValue Property="TypeName"
-                                       String="Reporte Tax"/>
+                                       String="Libro de Compras"/>
                         <PropertyValue Property="TypeNamePlural"
-                                       String="Reporte Tax"/>
+                                       String="Libro de Compras"/>
                         <PropertyValue Property="Title">
                             <Record Type="UI.DataField">
                                 <PropertyValue Property="Value"

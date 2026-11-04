@@ -46,6 +46,13 @@ sap.ui.define([
     var DATE_FIELDS = ["DocumentDate", "PostingDate"];
     var DATE_PATTERN = "dd.MM.yyyy";
 
+    // Anchos fijos (solo visualizacion en el navegador). Unidades "rem" simples:
+    // NIT ~12 caracteres y Serie ~15 caracteres, mas el relleno de la celda.
+    var COLUMN_WIDTHS = {
+        nit: "9rem",
+        serie: "10.5rem"
+    };
+
     // Clase CSS de la tabla (ver css/style.css): encabezados en azul
     var TABLE_STYLE_CLASS = "taxReportTable";
 
@@ -361,6 +368,31 @@ sap.ui.define([
         }
     }
 
+    /**
+     * Ejecuta un paso de ajuste visual aislado: si falla, lo registra en la
+     * consola y NO impide que se ejecuten los demas pasos.
+     */
+    function safeRun(fnStep, sLabel) {
+        try {
+            fnStep();
+        } catch (oError) {
+            console.error("[TaxReport] Fallo el paso '" + sLabel + "':", oError);
+        }
+    }
+
+    /** Aplica los anchos fijos de COLUMN_WIDTHS (NIT, Serie). */
+    function applyColumnWidths() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        var aColumns = oInner && oInner.getColumns ? oInner.getColumns() : [];
+        aColumns.forEach(function (oCol) {
+            var sWidth = COLUMN_WIDTHS[getColumnKey(oCol).toLowerCase()];
+            if (sWidth && oCol.getWidth() !== sWidth) {
+                oCol.setWidth(sWidth);
+            }
+        });
+    }
+
     /** Asigna el encabezado dinamico a cada columna cN con descripcion. */
     function applyColumnNames() {
         var oSmartTable = getSmartTable();
@@ -452,8 +484,9 @@ sap.ui.define([
         applyReportTitle();
         return loadParametros(oState.sCompany, oState.sTaxType).then(function (aRows) {
             oState.mParametrosMap = buildParametrosMap(aRows, oState.sTaxType, oState.sCompany);
-            applyColumnNames();
-            applyFilterItems();
+            safeRun(applyColumnNames, "applyColumnNames");
+            safeRun(applyColumnWidths, "applyColumnWidths");
+            safeRun(applyFilterItems, "applyFilterItems");
         }).catch(function () {
             // El error ya se registro en loadParametros
         });
@@ -777,11 +810,12 @@ sap.ui.define([
         oSmartTable.addStyleClass(TABLE_STYLE_CLASS);
         disableColumnResize();
         var fnReapply = function () {
-            applyReportTitle();
-            applyColumnNames();
-            hideCurrencyInAmountCells();
-            formatDateCells();
-            disableColumnResize();
+            safeRun(applyReportTitle, "applyReportTitle");
+            safeRun(applyColumnNames, "applyColumnNames");
+            safeRun(applyColumnWidths, "applyColumnWidths");
+            safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
+            safeRun(formatDateCells, "formatDateCells");
+            safeRun(disableColumnResize, "disableColumnResize");
         };
         try {
             oSmartTable.attachDataReceived(fnReapply);
@@ -1022,7 +1056,7 @@ sap.ui.define([
     }
 
     function buildFileName(oData) {
-        var aParts = ["ReporteTax"];
+        var aParts = ["LibroDeCompras"];
         if (oData.taxTypeText) {
             aParts.push(oData.taxTypeText.replace(/\s+/g, ""));
         }
@@ -1143,8 +1177,8 @@ sap.ui.define([
                 var mBindingParams = oEvent && oEvent.getParameter ? oEvent.getParameter("bindingParams") : null;
                 showTable();
                 hookSmartTable(oSmartTable);
-                hideCurrencyInAmountCells();
-                formatDateCells();
+                safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
+                safeRun(formatDateCells, "formatDateCells");
                 if (guardRebind(oSmartTable, mBindingParams)) {
                     return;
                 }
