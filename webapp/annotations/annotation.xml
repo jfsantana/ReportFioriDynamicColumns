@@ -191,6 +191,36 @@
                 </Annotation>
             </Annotations>
 
+            <!-- AYUDA DE BUSQUEDA (value help) de Sociedad: el parametro
+                 P_CompanyCode no trae ValueList desde el backend, se enlaza
+                 a la entidad I_CompanyCode que el servicio ya expone. -->
+            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedParameters/P_CompanyCode">
+                <Annotation Term="Common.ValueList">
+                    <Record Type="Common.ValueListType">
+                        <PropertyValue Property="Label" String="Company Code"/>
+                        <PropertyValue Property="CollectionPath" String="I_CompanyCode"/>
+                        <PropertyValue Property="SearchSupported" Bool="true"/>
+                        <PropertyValue Property="Parameters">
+                            <Collection>
+                                <Record Type="Common.ValueListParameterInOut">
+                                    <PropertyValue Property="LocalDataProperty" PropertyPath="P_CompanyCode"/>
+                                    <PropertyValue Property="ValueListProperty" String="CompanyCode"/>
+                                </Record>
+                                <Record Type="Common.ValueListParameterDisplayOnly">
+                                    <PropertyValue Property="ValueListProperty" String="CompanyCodeName"/>
+                                </Record>
+                                <Record Type="Common.ValueListParameterDisplayOnly">
+                                    <PropertyValue Property="ValueListProperty" String="CityName"/>
+                                </Record>
+                                <Record Type="Common.ValueListParameterDisplayOnly">
+                                    <PropertyValue Property="ValueListProperty" String="Country"/>
+                                </Record>
+                            </Collection>
+                        </PropertyValue>
+                    </Record>
+                </Annotation>
+            </Annotations>
+
             <!-- Las copias "normales" de los parametros (columnas clave de la
                  entidad de resultados) no deben ofrecerse como filtros. -->
             <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/P_CompanyCode">

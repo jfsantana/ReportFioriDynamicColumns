@@ -99,6 +99,8 @@ define root view entity YMQAFICDS_TAXRPT_ENRICHED
       CDS1.FiscalPeriod,
       CDS1.DocumentDate,
       CDS1.DocumentDateFormatted,                    // 2  Dia
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_AccountingDocumentType',
+                                                     element: 'AccountingDocumentType' } }]
       CDS1.AccountingDocumentType,
       CDS1.TipDocSat,                                // 3  Tipo de documento
       CDS1.DescTipoDocumento,                        // 4  Desc. tipo de documento
@@ -107,6 +109,8 @@ define root view entity YMQAFICDS_TAXRPT_ENRICHED
       CDS1.Nit,                                      // 7  NIT
       CDS1.Proveedor,                                // 8  Proveedor
       CDS1.NoProveedor,                              // 15 No. proveedor
+      @Consumption.valueHelpDefinition: [{ entity: { name: 'I_Supplier',
+                                                     element: 'Supplier' } }]
       CDS1.Supplier,
       CDS1.TrataEspecialPoliza,
       CDS1.SupplierPoliza,

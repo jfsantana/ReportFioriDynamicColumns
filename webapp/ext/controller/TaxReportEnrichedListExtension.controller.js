@@ -4,8 +4,9 @@ sap.ui.define([
     "sap/ui/model/Filter",
     "sap/ui/model/FilterOperator",
     "sap/m/MessageToast",
-    "sap/m/MessageBox"
-], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox) {
+    "sap/m/MessageBox",
+    "sap/ui/Device"
+], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device) {
     "use strict";
 
     /*
@@ -52,6 +53,22 @@ sap.ui.define([
         nit: "9rem",
         serie: "10.5rem"
     };
+
+    // Anchos para el modo "tabla completa con scroll horizontal" (escritorio y
+    // tableta). Cada columna lleva un ancho propio para que, si la suma supera
+    // el ancho de la pantalla, aparezca la barra de desplazamiento horizontal
+    // en lugar de que las columnas pasen al area emergente (popin).
+    var SCROLL_COLUMN_WIDTHS = {
+        documentdate: "7rem",
+        tipdocsat: "12rem",
+        documentreferenceid: "9rem",
+        proveedor: "18rem",
+        importeiva: "8rem",
+        total: "9rem",
+        noproveedor: "9rem",
+        accountingdocument: "10rem"
+    };
+    var SCROLL_DEFAULT_WIDTH = "11rem";   // C01..C15 y campos agregados por el usuario
 
     // Clase CSS de la tabla (ver css/style.css): encabezados en azul
     var TABLE_STYLE_CLASS = "taxReportTable";
@@ -380,15 +397,44 @@ sap.ui.define([
         }
     }
 
-    /** Aplica los anchos fijos de COLUMN_WIDTHS (NIT, Serie). */
+    /**
+     * Aplica los anchos de las columnas y el comportamiento responsivo:
+     *  - Escritorio / tableta: se ven TODAS las columnas en horizontal; si no
+     *    caben aparece la barra de desplazamiento inferior (sin popin).
+     *  - Telefono: se conserva el comportamiento estandar de la tabla
+     *    responsiva (las columnas que no caben pasan a formato de tarjeta).
+     */
     function applyColumnWidths() {
         var oSmartTable = getSmartTable();
         var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
         var aColumns = oInner && oInner.getColumns ? oInner.getColumns() : [];
+        var bScroll = !Device.system.phone;
+        if (bScroll && oSmartTable) {
+            // Sin popin: la SmartTable desactiva el modo automatico de la tabla
+            // (autoPopinMode) y muestra todas las columnas. Se quitan tambien
+            // los botones "mostrar mas / menos detalles por fila".
+            if (oSmartTable.getDemandPopin()) {
+                oSmartTable.setDemandPopin(false);
+            }
+            if (oInner && oInner.getHiddenInPopin && (oInner.getHiddenInPopin() || []).length) {
+                oInner.setHiddenInPopin([]);
+            }
+            var oDetailsButton = sap.ui.getCore().byId(oSmartTable.getId() + "-btnShowHideDetails");
+            if (oDetailsButton && oDetailsButton.getVisible()) {
+                oDetailsButton.setVisible(false);
+            }
+        }
         aColumns.forEach(function (oCol) {
-            var sWidth = COLUMN_WIDTHS[getColumnKey(oCol).toLowerCase()];
+            var sKey = getColumnKey(oCol).toLowerCase();
+            var sWidth = COLUMN_WIDTHS[sKey]
+                || (bScroll ? (SCROLL_COLUMN_WIDTHS[sKey] || SCROLL_DEFAULT_WIDTH) : "");
             if (sWidth && oCol.getWidth() !== sWidth) {
                 oCol.setWidth(sWidth);
+            }
+            if (bScroll) {
+                if (oCol.getDemandPopin()) {
+                    oCol.setDemandPopin(false);
+                }
             }
         });
     }

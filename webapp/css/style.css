@@ -1,3 +1,10 @@
+/* Scroll horizontal: sap.m.Table no trae barras propias; si la suma de los
+   anchos de columna supera el ancho disponible, el contenedor de la tabla
+   muestra la barra de desplazamiento inferior (escritorio/tableta). */
+.taxReportTable .sapMListTblCnt {
+    overflow-x: auto;
+}
+
 /* Encabezados de la tabla del reporte en azul (mismo azul que el PDF: #0A6ED1).
    La clase taxReportTable la agrega el controller a la SmartTable. */
 .taxReportTable .sapMListTblHeader > th,
