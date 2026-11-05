@@ -12,9 +12,14 @@ sap.ui.define([
     "sap/m/Text",
     "sap/m/Select",
     "sap/m/StepInput",
-    "sap/ui/core/Item"
+    "sap/ui/core/Item",
+    "sap/m/ToggleButton",
+    "sap/m/Table",
+    "sap/m/Column",
+    "sap/m/ColumnListItem"
 ], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device,
-    OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item) {
+    OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item,
+    ToggleButton, Table, Column, ColumnListItem) {
     "use strict";
 
     var PDF_LIB_PATH = "yatl01/reportecolumnasdinamicas/ext/lib/";
@@ -38,15 +43,17 @@ sap.ui.define([
     // en lugar de que las columnas pasen al area emergente (popin).
     var SCROLL_COLUMN_WIDTHS = {
         documentdate: "7rem",
-        tipdocsat: "12rem",
+        tipdocsat: "15rem",
         documentreferenceid: "9rem",
         proveedor: "18rem",
         importeiva: "8rem",
         total: "9rem",
-        noproveedor: "9rem",
-        accountingdocument: "10rem"
+        noproveedor: "8.5rem",
+        accountingdocument: "9rem"
     };
-    var SCROLL_DEFAULT_WIDTH = "11rem";   // C01..C15 y campos agregados por el usuario
+    // C01..C15 y campos agregados por el usuario. Mas angosto porque los
+    // encabezados largos se muestran en varias lineas (ver applyColumnWidths).
+    var SCROLL_DEFAULT_WIDTH = "9rem";
 
     // Paginacion: filas por pagina disponibles (la primera es la predeterminada)
     var PAGE_SIZES = [20, 50, 100];
@@ -73,6 +80,13 @@ sap.ui.define([
         iPageSize: PAGE_SIZES[0],
         bPagerNavigation: false, // true cuando el rebind lo origina el paginador
         oPager: null,            // controles del paginador
+        bSummaryMode: false,     // true = layout "Total por Tipo de Documento"
+        iSummaryToken: 0,        // descarta respuestas antiguas del resumen
+        oSummaryTable: null,
+        oSummaryButton: null,
+        mHiddenToolbarIds: {},   // botones de la toolbar ocultos en el resumen
+        oMovedToolbar: null,     // toolbar de la SmartTable mientras esta en el resumen
+        iDetailGrowFactor: undefined,
         pPdfLibraries: null,
         oAmountFormatter: null
     };
@@ -414,6 +428,11 @@ sap.ui.define([
                 || (bScroll ? (SCROLL_COLUMN_WIDTHS[sKey] || SCROLL_DEFAULT_WIDTH) : "");
             if (sWidth && oCol.getWidth() !== sWidth) {
                 oCol.setWidth(sWidth);
+            }
+            // Encabezado en varias lineas en lugar de cortarlo con "..."
+            var oHeader = oCol.getHeader && oCol.getHeader();
+            if (oHeader && oHeader.setWrapping && !oHeader.getWrapping()) {
+                oHeader.setWrapping(true);
             }
             if (bScroll) {
                 if (oCol.getDemandPopin()) {
@@ -840,6 +859,7 @@ sap.ui.define([
         oSmartTable.addStyleClass(TABLE_STYLE_CLASS);
         disableColumnResize();
         safeRun(function () { setupPaging(oSmartTable); }, "setupPaging");
+        safeRun(function () { setupSummary(oSmartTable); }, "setupSummary");
         var fnReapply = function () {
             safeRun(applyReportTitle, "applyReportTitle");
             safeRun(applyColumnNames, "applyColumnNames");
@@ -1041,7 +1061,271 @@ sap.ui.define([
     }
 
     /* ============================================================ */
-    /* Exportacion a PDF                                          */
+    /* Segundo layout: Total por Tipo de Documento                  */
+    /* ============================================================ */
+
+    // Botones de la toolbar de la SmartTable que solo aplican al detalle
+    var SUMMARY_HIDDEN_BUTTONS = ["-btnPersonalisation", "-btnExcelExport"];
+
+    /** "FACTURA (FACT)": descripcion + codigo SAT, igual que la vista de detalle. */
+    function formatTypeLabel(sCode, sDescription) {
+        if (sDescription && sCode) {
+            return sDescription + " (" + sCode + ")";
+        }
+        return sDescription || sCode || getResourceBundle().getText("summaryNoType");
+    }
+
+    /** Columnas numericas del resumen: C01..C99 mapeadas, IVA y TOTAL. */
+    function getSummaryAmountColumns() {
+        var aColumns = getMappedDynamicKeys().map(function (sKey) {
+            return { header: oState.mParametrosMap[sKey], key: sKey.toUpperCase() };
+        });
+        aColumns.push({ header: "IVA", key: "ImporteIVA" }, { header: "TOTAL", key: "Total" });
+        return aColumns;
+    }
+
+    /** Agrupa las filas por codigo de tipo y suma todas las columnas numericas. */
+    function groupRowsByType(aRows, aAmountColumns) {
+        var mGroups = {};
+        var aGroups = [];
+        var oGrand = { count: 0, sums: {} };
+        aAmountColumns.forEach(function (oCol) { oGrand.sums[oCol.key] = 0; });
+
+        aRows.forEach(function (oRow) {
+            var sCode = String(oRow.TipDocSat || "").trim();
+            var oGroup = mGroups[sCode];
+            if (!oGroup) {
+                oGroup = { code: sCode, label: formatTypeLabel(sCode, String(oRow.DescTipoDocumento || "").trim()),
+                    count: 0, sums: {} };
+                aAmountColumns.forEach(function (oCol) { oGroup.sums[oCol.key] = 0; });
+                mGroups[sCode] = oGroup;
+                aGroups.push(oGroup);
+            }
+            oGroup.count += 1;
+            oGrand.count += 1;
+            aAmountColumns.forEach(function (oCol) {
+                var fValue = parseFloat(oRow[oCol.key]);
+                if (!isNaN(fValue)) {
+                    oGroup.sums[oCol.key] += fValue;
+                    oGrand.sums[oCol.key] += fValue;
+                }
+            });
+        });
+        aGroups.sort(function (a, b) { return a.code < b.code ? -1 : (a.code > b.code ? 1 : 0); });
+        return { groups: aGroups, grand: oGrand };
+    }
+
+    function createSummaryColumn(sHeader, bEnd, sWidth) {
+        return new Column({
+            header: new Text({ text: sHeader }),
+            hAlign: bEnd ? "End" : "Begin",
+            width: sWidth
+        });
+    }
+
+    function createSummaryItem(aTexts, sStyleClass) {
+        var oItem = new ColumnListItem({
+            cells: aTexts.map(function (sText) { return new Text({ text: sText }); })
+        });
+        if (sStyleClass) {
+            oItem.addStyleClass(sStyleClass);
+        }
+        return oItem;
+    }
+
+    /** Dibuja la tabla resumen: una fila por tipo y una fila final de TOTAL GENERAL. */
+    function renderSummary(aRows) {
+        var oTable = oState.oSummaryTable;
+        var oBundle = getResourceBundle();
+        var aAmountColumns = getSummaryAmountColumns();
+        var oResult = groupRowsByType(aRows, aAmountColumns);
+
+        oTable.destroyItems();
+        oTable.destroyColumns();
+        oTable.addColumn(createSummaryColumn(oBundle.getText("summaryType"), false, "18rem"));
+        oTable.addColumn(createSummaryColumn(oBundle.getText("summaryDocuments"), true, "8rem"));
+        aAmountColumns.forEach(function (oCol) {
+            oTable.addColumn(createSummaryColumn(oCol.header, true, "11rem"));
+        });
+
+        var fnAmounts = function (oSums) {
+            return aAmountColumns.map(function (oCol) { return formatCellValue(oSums[oCol.key], true); });
+        };
+        oResult.groups.forEach(function (oGroup) {
+            oTable.addItem(createSummaryItem(
+                [oGroup.label, String(oGroup.count)].concat(fnAmounts(oGroup.sums))));
+        });
+        if (oResult.groups.length) {
+            oTable.addItem(createSummaryItem(
+                [oBundle.getText("summaryGrandTotal"), String(oResult.grand.count)].concat(fnAmounts(oResult.grand.sums)),
+                "taxReportSummaryTotal"));
+        }
+    }
+
+    /** Consulta todas las filas del filtro actual y recalcula el resumen. */
+    function refreshSummary() {
+        var oSmartTable = getSmartTable();
+        var oTable = oState.oSummaryTable;
+        if (!oState.bSummaryMode || !oSmartTable || !oTable) {
+            return;
+        }
+        var iToken = ++oState.iSummaryToken;
+        var aSelect = ["TipDocSat", "DescTipoDocumento", "ImporteIVA", "Total"].concat(
+            getMappedDynamicKeys().map(function (sKey) { return sKey.toUpperCase(); }));
+
+        oTable.setBusy(true);
+        requestAllRows(oSmartTable, aSelect).then(function (aRows) {
+            if (iToken === oState.iSummaryToken) {
+                renderSummary(aRows);
+            }
+        }).catch(function (oError) {
+            console.error("[TaxReport] Error al calcular el total por tipo:", oError);
+            if (iToken === oState.iSummaryToken) {
+                oTable.destroyItems();
+                MessageToast.show(getResourceBundle().getText("summaryError"));
+            }
+        }).finally(function () {
+            if (iToken === oState.iSummaryToken) {
+                oTable.setBusy(false);
+            }
+        });
+    }
+
+    /** Oculta/restaura los botones de la toolbar que solo aplican al detalle. */
+    function toggleDetailOnlyButtons(bHide) {
+        var oSmartTable = getSmartTable();
+        if (!oSmartTable) {
+            return;
+        }
+        SUMMARY_HIDDEN_BUTTONS.forEach(function (sSuffix) {
+            var sButtonId = oSmartTable.getId() + sSuffix;
+            var oButton = sap.ui.getCore().byId(sButtonId);
+            if (!oButton) {
+                return;
+            }
+            if (bHide && oButton.getVisible()) {
+                oState.mHiddenToolbarIds[sButtonId] = true;
+                oButton.setVisible(false);
+            } else if (!bHide && oState.mHiddenToolbarIds[sButtonId]) {
+                delete oState.mHiddenToolbarIds[sButtonId];
+                oButton.setVisible(true);
+            }
+        });
+    }
+
+    /**
+     * La barra de herramientas (titulo, boton de totales, Exportar PDF, etc.)
+     * vive DENTRO de la tabla de detalle, asi que al ocultarla desaparecia.
+     * En el resumen se pasa a la tabla resumen y al volver se devuelve.
+     * Ademas, la tabla de detalle tiene "growFactor = 1" en el contenedor
+     * flex de la SmartTable: aunque este oculta, su contenedor seguia
+     * ocupando el espacio libre y empujaba el resumen hacia abajo.
+     */
+    function moveToolbarAndLayout(bSummary) {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable();
+        if (!oInner || !oState.oSummaryTable) {
+            return;
+        }
+        var oLayoutData = oInner.getLayoutData && oInner.getLayoutData();
+        if (bSummary) {
+            var oToolbar = oInner.getHeaderToolbar && oInner.getHeaderToolbar();
+            if (oToolbar) {
+                oState.oMovedToolbar = oToolbar;
+                oState.oSummaryTable.setHeaderToolbar(oToolbar);
+            }
+            if (oLayoutData && oLayoutData.setGrowFactor) {
+                oState.iDetailGrowFactor = oLayoutData.getGrowFactor();
+                oLayoutData.setGrowFactor(0);
+            }
+        } else {
+            if (oState.oMovedToolbar) {
+                oInner.setHeaderToolbar(oState.oMovedToolbar);
+                oState.oMovedToolbar = null;
+            }
+            if (oLayoutData && oLayoutData.setGrowFactor && oState.iDetailGrowFactor !== undefined) {
+                oLayoutData.setGrowFactor(oState.iDetailGrowFactor);
+            }
+        }
+    }
+
+    /** Activa o desactiva el layout "Total por Tipo de Documento". */
+    function setSummaryMode(bOn) {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable();
+        if (!oSmartTable || !oState.oSummaryTable) {
+            return;
+        }
+        if (bOn && !(oInner.getBindingInfo("items") || oInner.getBindingInfo("rows"))) {
+            MessageToast.show(getResourceBundle().getText("pdfNoData"));
+            oState.oSummaryButton.setPressed(false);
+            return;
+        }
+        oState.bSummaryMode = bOn;
+        oSmartTable.toggleStyleClass("taxReportSummaryMode", bOn);
+        oState.oSummaryTable.setVisible(bOn);
+        toggleDetailOnlyButtons(bOn);
+        moveToolbarAndLayout(bOn);
+        if (bOn) {
+            refreshSummary();
+        } else {
+            oState.iSummaryToken += 1;
+        }
+    }
+
+    /**
+     * Crea la tabla resumen (oculta) debajo de la tabla de detalle y el boton
+     * "Total por Tipo de Documento", a la izquierda de "Exportar PDF".
+     */
+    function setupSummary(oSmartTable) {
+        if (oState.oSummaryTable) {
+            return;
+        }
+        var oBundle = getResourceBundle();
+        var oInner = oSmartTable.getTable();
+        oInner.addStyleClass("taxReportDetail");
+
+        oState.oSummaryTable = new Table({
+            visible: false,
+            noDataText: oBundle.getText("summaryNoData")
+        });
+        oState.oSummaryTable.addStyleClass("taxReportSummaryTable");
+        oSmartTable.addItem(oState.oSummaryTable);
+
+        oState.oSummaryButton = new ToggleButton({
+            icon: "sap-icon://table-view",
+            text: oBundle.getText("summaryButton"),
+            tooltip: oBundle.getText("summaryTooltip"),
+            type: "Transparent",
+            press: function (oEvent) { setSummaryMode(oEvent.getParameter("pressed")); }
+        });
+        var oToolbar = oSmartTable.getCustomToolbar && oSmartTable.getCustomToolbar();
+        if (oToolbar) {
+            var aContent = oToolbar.getContent();
+            var iPdfIndex = -1;
+            aContent.forEach(function (oControl, iIndex) {
+                if (iPdfIndex === -1 && oControl.getId().indexOf("exportPdfButton") !== -1) {
+                    iPdfIndex = iIndex;
+                }
+            });
+            oToolbar.insertContent(oState.oSummaryButton, iPdfIndex === -1 ? aContent.length : iPdfIndex);
+        } else {
+            console.warn("[TaxReport] La tabla no tiene toolbar personalizada: no se agrego el boton de totales");
+        }
+
+        // Si el usuario vuelve a ejecutar la busqueda con el resumen activo, se recalcula
+        oSmartTable.attachDataRequested(function () {
+            if (oState.bSummaryMode) {
+                oState.oSummaryTable.setBusy(true);
+            }
+        });
+        oSmartTable.attachDataReceived(function () {
+            safeRun(refreshSummary, "refreshSummary");
+        });
+    }
+
+    /* ============================================================ */
+    /* Exportacion a PDF                                        */
     /* ============================================================ */
 
     /**

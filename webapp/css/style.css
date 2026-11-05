@@ -5,6 +5,33 @@
     overflow-x: auto;
 }
 
+/* Encabezados de columna en varias lineas (sin "..."): respaldo en CSS por
+   si la etiqueta se vuelve a crear con "no wrap". */
+.taxReportTable .sapMListTblHeader .sapMLabel,
+.taxReportTable .sapMListTblHeader .sapMLabelNoWrap {
+    white-space: normal !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    line-height: 1.2;
+}
+
+/* Layout "Total por Tipo de Documento": se oculta el detalle y su paginador */
+.taxReportSummaryMode .taxReportDetail,
+.taxReportSummaryMode .taxReportPager {
+    display: none !important;
+}
+
+/* Fila de TOTAL GENERAL del resumen */
+.taxReportSummaryTotal > td {
+    background-color: #eaf1fb !important;
+    border-top: 2px solid #0a6ed1;
+}
+
+.taxReportSummaryTotal .sapMText {
+    font-weight: bold;
+    color: #0854a0;
+}
+
 /* Encabezados de la tabla del reporte en azul (mismo azul que el PDF: #0A6ED1).
    La clase taxReportTable la agrega el controller a la SmartTable. */
 .taxReportTable .sapMListTblHeader > th,
