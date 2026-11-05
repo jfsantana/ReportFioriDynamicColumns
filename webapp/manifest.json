@@ -147,7 +147,7 @@
           "name": "sap.suite.ui.generic.template.ListReport",
           "list": true,
           "settings": {
-            "smartVariantManagement": true,
+            "smartVariantManagement": false,
             "variantManagementHidden": false,
             "tableSettings": {
               "type": "ResponsiveTable"

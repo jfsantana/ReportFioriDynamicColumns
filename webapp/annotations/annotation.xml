@@ -8,6 +8,10 @@
         <edmx:Include Namespace="com.sap.vocabularies.UI.v1"
                       Alias="UI"/>
     </edmx:Reference>
+    <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/HTML5.xml">
+        <edmx:Include Namespace="com.sap.vocabularies.HTML5.v1"
+                      Alias="HTML5"/>
+    </edmx:Reference>
     <edmx:DataServices>
         <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm"
                 Namespace="local">
@@ -69,6 +73,12 @@
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="Serie"/>
                             <PropertyValue Property="Label" String="SERIE"/>
+                            <!-- Ancho fijo (~15 caracteres): evita el ancho automatico (hasta 20rem) -->
+                            <Annotation Term="HTML5.CssDefaults">
+                                <Record Type="HTML5.CssDefaultsType">
+                                    <PropertyValue Property="width" String="10.5rem"/>
+                                </Record>
+                            </Annotation>
                         </Record>
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="DocumentReferenceID"/>
@@ -77,6 +87,12 @@
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="Nit"/>
                             <PropertyValue Property="Label" String="NIT"/>
+                            <!-- Ancho fijo (~12 caracteres): evita el ancho automatico (hasta 20rem) -->
+                            <Annotation Term="HTML5.CssDefaults">
+                                <Record Type="HTML5.CssDefaultsType">
+                                    <PropertyValue Property="width" String="9rem"/>
+                                </Record>
+                            </Annotation>
                         </Record>
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="Proveedor"/>

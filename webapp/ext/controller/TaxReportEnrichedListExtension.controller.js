@@ -827,6 +827,14 @@ sap.ui.define([
         } catch (oError) {
             console.warn("[TaxReport] Tabla interna sin evento updateFinished", oError);
         }
+        // Variantes a nivel de tabla (smartVariantManagement = false): al
+        // aplicar una variante se vuelven a ocultar las columnas C01..C15 sin
+        // parametro y se reaplican titulo, anchos y formatos.
+        try {
+            oSmartTable.attachAfterVariantApply(fnReapply);
+        } catch (oError) {
+            console.warn("[TaxReport] SmartTable sin evento afterVariantApply", oError);
+        }
     }
 
     /* ============================================================ */
