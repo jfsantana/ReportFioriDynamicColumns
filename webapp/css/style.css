@@ -5,6 +5,18 @@
     overflow-x: auto;
 }
 
+/* El scroll horizontal NO debe mover el titulo ("Libro de Compras (64)") ni
+   los botones de la derecha: la barra de herramientas queda anclada a la
+   izquierda del contenedor mientras la tabla se desplaza debajo. */
+.taxReportTable .sapMListTblCnt > .sapMListHdr,
+.taxReportTable .sapMListTblCnt > .sapMListInfoTBarContainer {
+    position: sticky;
+    left: 0;
+    box-sizing: border-box;
+    width: 100%;
+    z-index: 3;
+}
+
 /* Encabezados de columna en varias lineas (sin "..."): respaldo en CSS por
    si la etiqueta se vuelve a crear con "no wrap". */
 .taxReportTable .sapMListTblHeader .sapMLabel,
