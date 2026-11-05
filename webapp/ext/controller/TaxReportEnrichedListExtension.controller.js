@@ -5,39 +5,17 @@ sap.ui.define([
     "sap/ui/model/FilterOperator",
     "sap/m/MessageToast",
     "sap/m/MessageBox",
-    "sap/ui/Device"
-], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device) {
+    "sap/ui/Device",
+    "sap/m/OverflowToolbar",
+    "sap/m/ToolbarSpacer",
+    "sap/m/Button",
+    "sap/m/Text",
+    "sap/m/Select",
+    "sap/m/StepInput",
+    "sap/ui/core/Item"
+], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device,
+    OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item) {
     "use strict";
-
-    /*
-     * Extension del List Report de Fiori Elements V2
-     * (sap.suite.ui.generic.template.ListReport.view.ListReport).
-     *
-     * Responsabilidades:
-     *  - Tipo de Impuesto fijo: SIEMPRE V (Input Tax). No hay filtro en
-     *    pantalla; el valor solo selecciona las filas de TablaParametros.
-     *  - Renombrar las columnas dinamicas C01..C15 con TablaParametros,
-     *    usando solo las filas de la Sociedad y del Tipo de Impuesto
-     *    seleccionados, y OCULTAR las columnas cN que no tengan fila.
-     *  - Renombrar tambien los CAMPOS DE FILTRO C01..C15 (barra de filtros y
-     *    "Adaptar filtros") y ocultar los que no tengan parametro.
-     *  - La tabla permanece oculta hasta que se pulsa "Go", y se vuelve a
-     *    ocultar apenas el usuario cambia cualquier filtro.
-     *  - Si la combinacion Sociedad + Tipo de Impuesto no tiene ninguna
-     *    columna en TablaParametros, NO se consulta ni se muestra ningun
-     *    documento.
-     *  - Las columnas sin parametro quedan BLOQUEADAS como ocultas (ni el
-     *    redimensionado ni la personalizacion pueden volver a mostrarlas) y
-     *    el redimensionado de columnas esta desactivado.
-     *  - Los importes se muestran solo con el valor: la moneda ya tiene su
-     *    propia columna ("Moneda"), no se repite junto a cada importe.
-     *  - Titulo del reporte dinamico segun el Tipo de Impuesto.
-     *  - Exportar el reporte a PDF.
-     *
-     * El estado vive a nivel de modulo (hay una sola instancia del List
-     * Report) para no depender de a que "this" apunte el framework al
-     * invocar los hooks de la extension.
-     */
 
     var PDF_LIB_PATH = "yatl01/reportecolumnasdinamicas/ext/lib/";
 
@@ -70,6 +48,9 @@ sap.ui.define([
     };
     var SCROLL_DEFAULT_WIDTH = "11rem";   // C01..C15 y campos agregados por el usuario
 
+    // Paginacion: filas por pagina disponibles (la primera es la predeterminada)
+    var PAGE_SIZES = [20, 50, 100];
+
     // Clase CSS de la tabla (ver css/style.css): encabezados en azul
     var TABLE_STYLE_CLASS = "taxReportTable";
 
@@ -81,13 +62,17 @@ sap.ui.define([
         mParametrosResolved: {}, // "sociedad|tipo" -> filas ya cargadas (consulta sincrona)
         vOriginalNoData: undefined,
         mHiddenByUs: {},         // columnas cN ocultadas por esta extension
-        sTaxType: "",            // "V" | "A" | ""
+        sTaxType: "",            // "V" 
         sCompany: "",            // sociedad del filtro (P_CompanyCode)
         mFilterItems: null,      // campos de filtro C01..C15 (SmartFilterBar)
         bFilterBarHooked: false,
         bSearched: false,        // true despues del primer "Go"
         mParametrosMap: null,    // fieldname(lowercase) -> descripcion
         bTableHooked: false,
+        iPage: 0,                // pagina actual (base 0)
+        iPageSize: PAGE_SIZES[0],
+        bPagerNavigation: false, // true cuando el rebind lo origina el paginador
+        oPager: null,            // controles del paginador
         pPdfLibraries: null,
         oAmountFormatter: null
     };
@@ -256,8 +241,7 @@ sap.ui.define([
 
     /**
      * Mapa FieldName -> DescripcionGrup solo con las filas del Tipo de
-     * Impuesto indicado (no se pueden mezclar V y A). Toma la primera
-     * aparicion de cada campo.
+     * Impuesto indicado (no se pueden mezclar V y A). 
      */
     function buildParametrosMap(aRows, sTaxType, sCompany) {
         var mMap = {};
@@ -855,6 +839,7 @@ sap.ui.define([
         oState.bTableHooked = true;
         oSmartTable.addStyleClass(TABLE_STYLE_CLASS);
         disableColumnResize();
+        safeRun(function () { setupPaging(oSmartTable); }, "setupPaging");
         var fnReapply = function () {
             safeRun(applyReportTitle, "applyReportTitle");
             safeRun(applyColumnNames, "applyColumnNames");
@@ -862,6 +847,7 @@ sap.ui.define([
             safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
             safeRun(formatDateCells, "formatDateCells");
             safeRun(disableColumnResize, "disableColumnResize");
+            safeRun(updatePager, "updatePager");
         };
         try {
             oSmartTable.attachDataReceived(fnReapply);
@@ -884,7 +870,178 @@ sap.ui.define([
     }
 
     /* ============================================================ */
-    /* Exportacion a PDF                                            */
+    /* Paginacion (controles estandar sap.m)                        */
+    /* ============================================================ */
+
+    /**
+     * El paginador consulta al servidor solo la pagina actual ($skip/$top),
+     * por eso el "growing" (boton "Mas") de la tabla se desactiva: ese
+     * mecanismo siempre pide desde la fila 0.
+     */
+    function disableGrowing(oSmartTable) {
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (oInner && oInner.getGrowing && oInner.getGrowing()) {
+            oInner.setGrowing(false);
+        }
+    }
+
+    /**
+     * Fija la pagina solicitada en los parametros del binding. Cualquier
+     * consulta que NO venga del paginador (Go, orden, filtros, variante)
+     * vuelve a la primera pagina.
+     */
+    function applyPaging(oSmartTable, mBindingParams) {
+        if (!mBindingParams) {
+            return;
+        }
+        disableGrowing(oSmartTable);
+        if (!oState.bPagerNavigation) {
+            oState.iPage = 0;
+        }
+        oState.bPagerNavigation = false;
+        mBindingParams.startIndex = oState.iPage * oState.iPageSize;
+        mBindingParams.length = oState.iPageSize;
+    }
+
+    function goToPage(iPage, iPageSize) {
+        var oSmartTable = getSmartTable();
+        if (!oSmartTable) {
+            return;
+        }
+        if (iPageSize) {
+            oState.iPageSize = iPageSize;
+        }
+        oState.iPage = Math.max(0, iPage);
+        oState.bPagerNavigation = true;
+        oSmartTable.rebindTable(true);
+    }
+
+    /** Crea la barra de paginacion y la agrega debajo de la tabla. */
+    function createPager(oSmartTable) {
+        var oBundle = getResourceBundle();
+        var oPager = { iPages: 1 };
+
+        oPager.oFirst = new Button({
+            icon: "sap-icon://media-rewind",
+            tooltip: oBundle.getText("pagerFirst"),
+            type: "Transparent",
+            press: function () { goToPage(0); }
+        });
+        oPager.oPrev = new Button({
+            icon: "sap-icon://navigation-left-arrow",
+            tooltip: oBundle.getText("pagerPrevious"),
+            type: "Transparent",
+            press: function () { goToPage(oState.iPage - 1); }
+        });
+        oPager.oNext = new Button({
+            icon: "sap-icon://navigation-right-arrow",
+            tooltip: oBundle.getText("pagerNext"),
+            type: "Transparent",
+            press: function () { goToPage(oState.iPage + 1); }
+        });
+        oPager.oLast = new Button({
+            icon: "sap-icon://media-forward",
+            tooltip: oBundle.getText("pagerLast"),
+            type: "Transparent",
+            press: function () { goToPage(oPager.iPages - 1); }
+        });
+        oPager.oPageInput = new StepInput({
+            min: 1,
+            max: 1,
+            value: 1,
+            step: 1,
+            width: "7rem",
+            change: function (oEvent) {
+                var iValue = parseInt(oEvent.getParameter("value"), 10);
+                if (iValue >= 1 && iValue <= oPager.iPages && iValue - 1 !== oState.iPage) {
+                    goToPage(iValue - 1);
+                } else {
+                    updatePager();
+                }
+            }
+        });
+        oPager.oPageText = new Text({ text: oBundle.getText("pagerPage") });
+        oPager.oOfText = new Text({ text: "" });
+        oPager.oRange = new Text({ text: "" });
+        oPager.oSizeSelect = new Select({
+            width: "5.5rem",
+            selectedKey: String(oState.iPageSize),
+            items: PAGE_SIZES.map(function (iSize) {
+                return new Item({ key: String(iSize), text: String(iSize) });
+            }),
+            change: function (oEvent) {
+                goToPage(0, parseInt(oEvent.getParameter("selectedItem").getKey(), 10));
+            }
+        });
+
+        oPager.oToolbar = new OverflowToolbar({
+            visible: false,
+            content: [
+                new Text({ text: oBundle.getText("pagerRowsPerPage") }),
+                oPager.oSizeSelect,
+                new ToolbarSpacer(),
+                oPager.oRange,
+                oPager.oFirst,
+                oPager.oPrev,
+                oPager.oPageText,
+                oPager.oPageInput,
+                oPager.oOfText,
+                oPager.oNext,
+                oPager.oLast
+            ]
+        });
+        oPager.oToolbar.addStyleClass("taxReportPager");
+        oSmartTable.addItem(oPager.oToolbar);
+        oState.oPager = oPager;
+    }
+
+    /** Actualiza la barra con el total de filas del binding. */
+    function updatePager() {
+        var oPager = oState.oPager;
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        var oBinding = oInner && oInner.getBinding && oInner.getBinding("items");
+        if (!oPager || !oBinding || !oBinding.getLength) {
+            return;
+        }
+        if (oBinding.isLengthFinal && !oBinding.isLengthFinal()) {
+            return;
+        }
+        var oBundle = getResourceBundle();
+        var iTotal = oBinding.getLength() || 0;
+        var iSize = oState.iPageSize;
+        var iPages = Math.max(1, Math.ceil(iTotal / iSize));
+
+        // Pagina inexistente (por ejemplo, ahora hay menos filas): ultima pagina
+        if (iTotal > 0 && oState.iPage >= iPages) {
+            goToPage(iPages - 1);
+            return;
+        }
+
+        var iFirst = iTotal ? oState.iPage * iSize + 1 : 0;
+        var iLast = Math.min(iTotal, (oState.iPage + 1) * iSize);
+        oPager.iPages = iPages;
+        oPager.oPageInput.setMax(iPages);
+        oPager.oPageInput.setValue(oState.iPage + 1);
+        oPager.oOfText.setText(oBundle.getText("pagerOf", [iPages]));
+        oPager.oRange.setText(oBundle.getText("pagerRange", [iFirst, iLast, iTotal]));
+        oPager.oSizeSelect.setSelectedKey(String(iSize));
+        oPager.oFirst.setEnabled(oState.iPage > 0);
+        oPager.oPrev.setEnabled(oState.iPage > 0);
+        oPager.oNext.setEnabled(oState.iPage < iPages - 1);
+        oPager.oLast.setEnabled(oState.iPage < iPages - 1);
+        oPager.oToolbar.setVisible(iTotal > 0);
+    }
+
+    function setupPaging(oSmartTable) {
+        disableGrowing(oSmartTable);
+        if (!oState.oPager) {
+            createPager(oSmartTable);
+        }
+    }
+
+    /* ============================================================ */
+    /* Exportacion a PDF                                          */
     /* ============================================================ */
 
     /**
@@ -1237,6 +1394,7 @@ sap.ui.define([
                     return;
                 }
                 ensureSelectForDynamicColumns(mBindingParams);
+                safeRun(function () { applyPaging(oSmartTable, mBindingParams); }, "applyPaging");
                 refreshForTaxType();
             },
 
