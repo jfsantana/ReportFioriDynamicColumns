@@ -1133,8 +1133,8 @@ sap.ui.define([
 
     /**
      * Agrupa las filas segun el layout y suma todas las columnas numericas.
-     * Los documentos se cuentan SIN repetir (un documento con varios
-     * indicadores de IVA cuenta una vez por grupo y una vez en el total).
+     * Dentro de un grupo los documentos se cuentan SIN repetir; el total de
+     * DOCUMENTOS es la suma de los grupos (ver renderSummary).
      */
     function groupRows(aRows, oMode, aAmountColumns) {
         var mGroups = {};
@@ -1218,8 +1218,12 @@ sap.ui.define([
             var aTotalLabels = oMode.labelColumns.map(function (oLabelCol, iIndex) {
                 return iIndex === 0 ? oBundle.getText("summaryGrandTotal") : "";
             });
+            // DOCUMENTOS del total = suma de la columna (consistente con las filas)
+            var iTotalDocs = oResult.groups.reduce(function (iSum, oGroup) {
+                return iSum + Object.keys(oGroup.docs).length;
+            }, 0);
             oTable.addItem(createSummaryItem(aTotalLabels
-                .concat([String(Object.keys(oResult.grand.docs).length)], fnAmounts(oResult.grand.sums)),
+                .concat([String(iTotalDocs)], fnAmounts(oResult.grand.sums)),
             "taxReportSummaryTotal"));
         }
     }
