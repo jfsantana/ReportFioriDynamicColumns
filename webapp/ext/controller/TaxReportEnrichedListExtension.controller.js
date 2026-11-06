@@ -80,10 +80,10 @@ sap.ui.define([
         iPageSize: PAGE_SIZES[0],
         bPagerNavigation: false, // true cuando el rebind lo origina el paginador
         oPager: null,            // controles del paginador
-        bSummaryMode: false,     // true = layout "Total por Tipo de Documento"
+        sSummaryMode: "",        // layout totalizado activo: "docType" | "taxCode" | "" (detalle)
         iSummaryToken: 0,        // descarta respuestas antiguas del resumen
         oSummaryTable: null,
-        oSummaryButton: null,
+        oSummaryButtons: {},     // modo -> ToggleButton de la toolbar
         mHiddenToolbarIds: {},   // botones de la toolbar ocultos en el resumen
         oMovedToolbar: null,     // toolbar de la SmartTable mientras esta en el resumen
         iDetailGrowFactor: undefined,
@@ -1061,11 +1061,16 @@ sap.ui.define([
     }
 
     /* ============================================================ */
-    /* Segundo layout: Total por Tipo de Documento                  */
+    /* Layouts totalizados: por Tipo de Documento / por Tipo de     */
+    /* Impuesto (TaxCode)                                           */
     /* ============================================================ */
 
     // Botones de la toolbar de la SmartTable que solo aplican al detalle
     var SUMMARY_HIDDEN_BUTTONS = ["-btnPersonalisation", "-btnExcelExport"];
+
+    function trimValue(vValue) {
+        return String(vValue === null || vValue === undefined ? "" : vValue).trim();
+    }
 
     /** "FACTURA (FACT)": descripcion + codigo SAT, igual que la vista de detalle. */
     function formatTypeLabel(sCode, sDescription) {
@@ -1074,6 +1079,48 @@ sap.ui.define([
         }
         return sDescription || sCode || getResourceBundle().getText("summaryNoType");
     }
+
+    /**
+     * Layouts totalizados disponibles. Cada uno define:
+     *  - select: campos OData que se agrupan
+     *  - labelColumns: columnas de texto del resumen (encabezado i18n y ancho)
+     *  - group(oRow): { id, sort, labels } -> clave del grupo, orden y textos
+     * Todas las columnas numericas (C01..C99 mapeadas, IVA y TOTAL) se suman.
+     */
+    var SUMMARY_MODES = {
+        docType: {
+            buttonKey: "summaryButton",
+            tooltipKey: "summaryTooltip",
+            select: ["TipDocSat", "DescTipoDocumento"],
+            labelColumns: [{ headerKey: "summaryType", width: "18rem" }],
+            group: function (oRow) {
+                var sCode = trimValue(oRow.TipDocSat);
+                return {
+                    id: sCode,
+                    sort: sCode,
+                    labels: [formatTypeLabel(sCode, trimValue(oRow.DescTipoDocumento))]
+                };
+            }
+        },
+        taxCode: {
+            buttonKey: "summaryTaxButton",
+            tooltipKey: "summaryTaxTooltip",
+            select: ["TaxCode", "TaxCodeName"],
+            labelColumns: [
+                { headerKey: "summaryTaxCode", width: "8rem" },
+                { headerKey: "summaryTaxCodeName", width: "18rem" }
+            ],
+            group: function (oRow) {
+                var sCode = trimValue(oRow.TaxCode);
+                var sName = trimValue(oRow.TaxCodeName);
+                return {
+                    id: sCode + "|" + sName,
+                    sort: sCode,
+                    labels: [sCode || getResourceBundle().getText("summaryNoTaxCode"), sName]
+                };
+            }
+        }
+    };
 
     /** Columnas numericas del resumen: C01..C99 mapeadas, IVA y TOTAL. */
     function getSummaryAmountColumns() {
@@ -1084,25 +1131,29 @@ sap.ui.define([
         return aColumns;
     }
 
-    /** Agrupa las filas por codigo de tipo y suma todas las columnas numericas. */
-    function groupRowsByType(aRows, aAmountColumns) {
+    /**
+     * Agrupa las filas segun el layout y suma todas las columnas numericas.
+     * Los documentos se cuentan SIN repetir (un documento con varios
+     * indicadores de IVA cuenta una vez por grupo y una vez en el total).
+     */
+    function groupRows(aRows, oMode, aAmountColumns) {
         var mGroups = {};
         var aGroups = [];
-        var oGrand = { count: 0, sums: {} };
+        var oGrand = { docs: {}, sums: {} };
         aAmountColumns.forEach(function (oCol) { oGrand.sums[oCol.key] = 0; });
 
         aRows.forEach(function (oRow) {
-            var sCode = String(oRow.TipDocSat || "").trim();
-            var oGroup = mGroups[sCode];
+            var oInfo = oMode.group(oRow);
+            var oGroup = mGroups[oInfo.id];
             if (!oGroup) {
-                oGroup = { code: sCode, label: formatTypeLabel(sCode, String(oRow.DescTipoDocumento || "").trim()),
-                    count: 0, sums: {} };
+                oGroup = { id: oInfo.id, sort: oInfo.sort, labels: oInfo.labels, docs: {}, sums: {} };
                 aAmountColumns.forEach(function (oCol) { oGroup.sums[oCol.key] = 0; });
-                mGroups[sCode] = oGroup;
+                mGroups[oInfo.id] = oGroup;
                 aGroups.push(oGroup);
             }
-            oGroup.count += 1;
-            oGrand.count += 1;
+            var sDocKey = [oRow.CompanyCode, oRow.AccountingDocument, oRow.FiscalYear].join("|");
+            oGroup.docs[sDocKey] = true;
+            oGrand.docs[sDocKey] = true;
             aAmountColumns.forEach(function (oCol) {
                 var fValue = parseFloat(oRow[oCol.key]);
                 if (!isNaN(fValue)) {
@@ -1111,7 +1162,12 @@ sap.ui.define([
                 }
             });
         });
-        aGroups.sort(function (a, b) { return a.code < b.code ? -1 : (a.code > b.code ? 1 : 0); });
+        aGroups.sort(function (a, b) {
+            if (a.sort !== b.sort) {
+                return a.sort < b.sort ? -1 : 1;
+            }
+            return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+        });
         return { groups: aGroups, grand: oGrand };
     }
 
@@ -1133,16 +1189,18 @@ sap.ui.define([
         return oItem;
     }
 
-    /** Dibuja la tabla resumen: una fila por tipo y una fila final de TOTAL GENERAL. */
-    function renderSummary(aRows) {
+    /** Dibuja la tabla resumen: una fila por grupo y una fila final de TOTAL GENERAL. */
+    function renderSummary(aRows, oMode) {
         var oTable = oState.oSummaryTable;
         var oBundle = getResourceBundle();
         var aAmountColumns = getSummaryAmountColumns();
-        var oResult = groupRowsByType(aRows, aAmountColumns);
+        var oResult = groupRows(aRows, oMode, aAmountColumns);
 
         oTable.destroyItems();
         oTable.destroyColumns();
-        oTable.addColumn(createSummaryColumn(oBundle.getText("summaryType"), false, "18rem"));
+        oMode.labelColumns.forEach(function (oLabelCol) {
+            oTable.addColumn(createSummaryColumn(oBundle.getText(oLabelCol.headerKey), false, oLabelCol.width));
+        });
         oTable.addColumn(createSummaryColumn(oBundle.getText("summaryDocuments"), true, "8rem"));
         aAmountColumns.forEach(function (oCol) {
             oTable.addColumn(createSummaryColumn(oCol.header, true, "11rem"));
@@ -1152,34 +1210,39 @@ sap.ui.define([
             return aAmountColumns.map(function (oCol) { return formatCellValue(oSums[oCol.key], true); });
         };
         oResult.groups.forEach(function (oGroup) {
-            oTable.addItem(createSummaryItem(
-                [oGroup.label, String(oGroup.count)].concat(fnAmounts(oGroup.sums))));
+            oTable.addItem(createSummaryItem(oGroup.labels
+                .concat([String(Object.keys(oGroup.docs).length)], fnAmounts(oGroup.sums))));
         });
         if (oResult.groups.length) {
-            oTable.addItem(createSummaryItem(
-                [oBundle.getText("summaryGrandTotal"), String(oResult.grand.count)].concat(fnAmounts(oResult.grand.sums)),
-                "taxReportSummaryTotal"));
+            // "TOTAL GENERAL" va en la primera columna de texto; las demas quedan vacias
+            var aTotalLabels = oMode.labelColumns.map(function (oLabelCol, iIndex) {
+                return iIndex === 0 ? oBundle.getText("summaryGrandTotal") : "";
+            });
+            oTable.addItem(createSummaryItem(aTotalLabels
+                .concat([String(Object.keys(oResult.grand.docs).length)], fnAmounts(oResult.grand.sums)),
+            "taxReportSummaryTotal"));
         }
     }
 
-    /** Consulta todas las filas del filtro actual y recalcula el resumen. */
+    /** Consulta todas las filas del filtro actual y recalcula el resumen activo. */
     function refreshSummary() {
         var oSmartTable = getSmartTable();
         var oTable = oState.oSummaryTable;
-        if (!oState.bSummaryMode || !oSmartTable || !oTable) {
+        var oMode = SUMMARY_MODES[oState.sSummaryMode];
+        if (!oMode || !oSmartTable || !oTable) {
             return;
         }
         var iToken = ++oState.iSummaryToken;
-        var aSelect = ["TipDocSat", "DescTipoDocumento", "ImporteIVA", "Total"].concat(
-            getMappedDynamicKeys().map(function (sKey) { return sKey.toUpperCase(); }));
+        var aSelect = ["ImporteIVA", "Total", "CompanyCode", "AccountingDocument", "FiscalYear"]
+            .concat(oMode.select, getMappedDynamicKeys().map(function (sKey) { return sKey.toUpperCase(); }));
 
         oTable.setBusy(true);
         requestAllRows(oSmartTable, aSelect).then(function (aRows) {
             if (iToken === oState.iSummaryToken) {
-                renderSummary(aRows);
+                renderSummary(aRows, oMode);
             }
         }).catch(function (oError) {
-            console.error("[TaxReport] Error al calcular el total por tipo:", oError);
+            console.error("[TaxReport] Error al calcular el resumen '" + oState.sSummaryMode + "':", oError);
             if (iToken === oState.iSummaryToken) {
                 oTable.destroyItems();
                 MessageToast.show(getResourceBundle().getText("summaryError"));
@@ -1214,7 +1277,7 @@ sap.ui.define([
     }
 
     /**
-     * La barra de herramientas (titulo, boton de totales, Exportar PDF, etc.)
+     * La barra de herramientas (titulo, botones de totales, Exportar PDF, etc.)
      * vive DENTRO de la tabla de detalle, asi que al ocultarla desaparecia.
      * En el resumen se pasa a la tabla resumen y al volver se devuelve.
      * Ademas, la tabla de detalle tiene "growFactor = 1" en el contenedor
@@ -1249,23 +1312,46 @@ sap.ui.define([
         }
     }
 
-    /** Activa o desactiva el layout "Total por Tipo de Documento". */
-    function setSummaryMode(bOn) {
+    /** Solo el boton del layout activo queda "presionado". */
+    function syncSummaryButtons() {
+        Object.keys(oState.oSummaryButtons).forEach(function (sMode) {
+            oState.oSummaryButtons[sMode].setPressed(sMode === oState.sSummaryMode);
+        });
+    }
+
+    /**
+     * Activa un layout totalizado ("docType" | "taxCode") o vuelve al
+     * detalle (cadena vacia). Cambiar de un resumen a otro no pasa por el detalle.
+     */
+    function setSummaryMode(sMode) {
         var oSmartTable = getSmartTable();
         var oInner = oSmartTable && oSmartTable.getTable();
         if (!oSmartTable || !oState.oSummaryTable) {
             return;
         }
-        if (bOn && !(oInner.getBindingInfo("items") || oInner.getBindingInfo("rows"))) {
+        if (sMode && !(oInner.getBindingInfo("items") || oInner.getBindingInfo("rows"))) {
             MessageToast.show(getResourceBundle().getText("pdfNoData"));
-            oState.oSummaryButton.setPressed(false);
+            oState.sSummaryMode = "";
+            syncSummaryButtons();
             return;
         }
-        oState.bSummaryMode = bOn;
+        var bWasOn = !!oState.sSummaryMode;
+        var bOn = !!sMode;
+        var bSwitching = bWasOn && bOn && oState.sSummaryMode !== sMode;
+
+        oState.sSummaryMode = sMode;
+        syncSummaryButtons();
         oSmartTable.toggleStyleClass("taxReportSummaryMode", bOn);
         oState.oSummaryTable.setVisible(bOn);
-        toggleDetailOnlyButtons(bOn);
-        moveToolbarAndLayout(bOn);
+        if (bOn !== bWasOn) {
+            toggleDetailOnlyButtons(bOn);
+            moveToolbarAndLayout(bOn);
+        }
+        if (bSwitching) {
+            // no mostrar un instante las columnas del resumen anterior
+            oState.oSummaryTable.destroyItems();
+            oState.oSummaryTable.destroyColumns();
+        }
         if (bOn) {
             refreshSummary();
         } else {
@@ -1274,8 +1360,9 @@ sap.ui.define([
     }
 
     /**
-     * Crea la tabla resumen (oculta) debajo de la tabla de detalle y el boton
-     * "Total por Tipo de Documento", a la izquierda de "Exportar PDF".
+     * Crea la tabla resumen (oculta) debajo de la tabla de detalle y los
+     * botones "Total por Tipo de Documento" y "Total por Tipo de Impuesto",
+     * a la izquierda de "Exportar PDF".
      */
     function setupSummary(oSmartTable) {
         if (oState.oSummaryTable) {
@@ -1292,14 +1379,8 @@ sap.ui.define([
         oState.oSummaryTable.addStyleClass("taxReportSummaryTable");
         oSmartTable.addItem(oState.oSummaryTable);
 
-        oState.oSummaryButton = new ToggleButton({
-            icon: "sap-icon://table-view",
-            text: oBundle.getText("summaryButton"),
-            tooltip: oBundle.getText("summaryTooltip"),
-            type: "Transparent",
-            press: function (oEvent) { setSummaryMode(oEvent.getParameter("pressed")); }
-        });
         var oToolbar = oSmartTable.getCustomToolbar && oSmartTable.getCustomToolbar();
+        var iInsertIndex = 0;
         if (oToolbar) {
             var aContent = oToolbar.getContent();
             var iPdfIndex = -1;
@@ -1308,14 +1389,30 @@ sap.ui.define([
                     iPdfIndex = iIndex;
                 }
             });
-            oToolbar.insertContent(oState.oSummaryButton, iPdfIndex === -1 ? aContent.length : iPdfIndex);
+            iInsertIndex = iPdfIndex === -1 ? aContent.length : iPdfIndex;
         } else {
-            console.warn("[TaxReport] La tabla no tiene toolbar personalizada: no se agrego el boton de totales");
+            console.warn("[TaxReport] La tabla no tiene toolbar personalizada: no se agregaron los botones de totales");
         }
 
-        // Si el usuario vuelve a ejecutar la busqueda con el resumen activo, se recalcula
+        Object.keys(SUMMARY_MODES).forEach(function (sMode) {
+            var oMode = SUMMARY_MODES[sMode];
+            var oButton = new ToggleButton({
+                icon: "sap-icon://table-view",
+                text: oBundle.getText(oMode.buttonKey),
+                tooltip: oBundle.getText(oMode.tooltipKey),
+                type: "Transparent",
+                press: function (oEvent) { setSummaryMode(oEvent.getParameter("pressed") ? sMode : ""); }
+            });
+            oState.oSummaryButtons[sMode] = oButton;
+            if (oToolbar) {
+                oToolbar.insertContent(oButton, iInsertIndex);
+                iInsertIndex += 1;   // los botones quedan en el orden de SUMMARY_MODES
+            }
+        });
+
+        // Si el usuario vuelve a ejecutar la busqueda con un resumen activo, se recalcula
         oSmartTable.attachDataRequested(function () {
-            if (oState.bSummaryMode) {
+            if (oState.sSummaryMode) {
                 oState.oSummaryTable.setBusy(true);
             }
         });

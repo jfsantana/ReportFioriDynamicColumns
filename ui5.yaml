@@ -20,6 +20,7 @@ server:
           - path: /sap
             url: http://demo.mqaamericas.com:8005
             client: '300'
+            Language: 'S'
     - name: fiori-tools-appreload
       afterMiddleware: compression
       configuration:
