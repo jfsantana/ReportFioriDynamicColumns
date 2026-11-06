@@ -16,76 +16,91 @@ define root view entity YMQAFICDS_TAXRPT_ENRICHED
     on  CDS1.CompanyCode = CFG1.sociedad
     and CDS1.TaxCode     = CFG1.taxco
     and CFG1.field_name  = 'C01'
+    and CFG1.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG2
     on  CDS1.CompanyCode = CFG2.sociedad
     and CDS1.TaxCode     = CFG2.taxco
     and CFG2.field_name  = 'C02'
+    and CFG2.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG3
     on  CDS1.CompanyCode = CFG3.sociedad
     and CDS1.TaxCode     = CFG3.taxco
     and CFG3.field_name  = 'C03'
+    and CFG3.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG4
     on  CDS1.CompanyCode = CFG4.sociedad
     and CDS1.TaxCode     = CFG4.taxco
     and CFG4.field_name  = 'C04'
+    and CFG4.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG5
     on  CDS1.CompanyCode = CFG5.sociedad
     and CDS1.TaxCode     = CFG5.taxco
     and CFG5.field_name  = 'C05'
+    and CFG5.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG6
     on  CDS1.CompanyCode = CFG6.sociedad
     and CDS1.TaxCode     = CFG6.taxco
     and CFG6.field_name  = 'C06'
+    and CFG6.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG7
     on  CDS1.CompanyCode = CFG7.sociedad
     and CDS1.TaxCode     = CFG7.taxco
     and CFG7.field_name  = 'C07'
+    and CFG7.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG8
     on  CDS1.CompanyCode = CFG8.sociedad
     and CDS1.TaxCode     = CFG8.taxco
     and CFG8.field_name  = 'C08'
+    and CFG8.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG9
     on  CDS1.CompanyCode = CFG9.sociedad
     and CDS1.TaxCode     = CFG9.taxco
     and CFG9.field_name  = 'C09'
+    and CFG9.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG10
     on  CDS1.CompanyCode = CFG10.sociedad
     and CDS1.TaxCode     = CFG10.taxco
     and CFG10.field_name  = 'C10'
+    and CFG10.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG11
     on  CDS1.CompanyCode = CFG11.sociedad
     and CDS1.TaxCode     = CFG11.taxco
     and CFG11.field_name  = 'C11'
+    and CFG11.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG12
     on  CDS1.CompanyCode = CFG12.sociedad
     and CDS1.TaxCode     = CFG12.taxco
     and CFG12.field_name  = 'C12'
+    and CFG12.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG13
     on  CDS1.CompanyCode = CFG13.sociedad
     and CDS1.TaxCode     = CFG13.taxco
     and CFG13.field_name  = 'C13'
+    and CFG13.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG14
     on  CDS1.CompanyCode = CFG14.sociedad
     and CDS1.TaxCode     = CFG14.taxco
     and CFG14.field_name  = 'C14'
+    and CFG14.tax_type    = 'V'
 
   left outer join ymqatb_tax_cfg as CFG15
     on  CDS1.CompanyCode = CFG15.sociedad
     and CDS1.TaxCode     = CFG15.taxco
     and CFG15.field_name  = 'C15'
+    and CFG15.tax_type    = 'V'
 
 {
   key CDS1.CompanyCode,
@@ -114,6 +129,8 @@ define root view entity YMQAFICDS_TAXRPT_ENRICHED
       CDS1.Supplier,
       CDS1.TrataEspecialPoliza,
       CDS1.SupplierPoliza,
+      CDS1.TaxCodeName,
+      CDS1.TaxCode,
 
       CDS1.CompanyCodeCurrency,
       CDS1.TransactionCurrency,
@@ -246,4 +263,6 @@ group by
   CDS1.TrataEspecialPoliza,
   CDS1.SupplierPoliza,
   CDS1.CompanyCodeCurrency,
-  CDS1.TransactionCurrency
+  CDS1.TransactionCurrency,
+  CDS1.TaxCodeName,
+  CDS1.TaxCode

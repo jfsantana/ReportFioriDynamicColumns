@@ -213,4 +213,8 @@ define view entity YMQAFICDS_TAXRPT_PRINCIPAL
       cast( 1 as abap.int4 )                                                     as Cantidad
 }
 where
-  L3.ReversalReferenceDocument = ''   // Doc. funcional: no incluir documentos anulados
+      L3.ReversalReferenceDocument = ''   // Doc. funcional: no incluir documentos anulados
+  and _TaxParams.TaxType           = 'V'  // Requerimiento: solo Tipo de Impuesto V (Input Tax).
+                                          // El 'V' del ON de la asociacion NO filtra filas (es un
+                                          // left outer join): sin esta condicion entraban las lineas
+                                          // con indicador de IVA de otro tipo (A) o sin parametrizar.
