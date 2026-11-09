@@ -16,10 +16,11 @@ sap.ui.define([
     "sap/m/ToggleButton",
     "sap/m/Table",
     "sap/m/Column",
-    "sap/m/ColumnListItem"
+    "sap/m/ColumnListItem",
+    "sap/ui/model/Sorter"
 ], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device,
     OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item,
-    ToggleButton, Table, Column, ColumnListItem) {
+    ToggleButton, Table, Column, ColumnListItem, Sorter) {
     "use strict";
 
     var PDF_LIB_PATH = "yatl01/reportecolumnasdinamicas/ext/lib/";
@@ -906,6 +907,22 @@ sap.ui.define([
     }
 
     /**
+     * Respaldo del orden inicial (el principal es UI.PresentationVariant en
+     * annotation.xml): si la consulta no trae ningun orden, se ordena
+     * ascendente por DIA (DocumentDate) y por documento para desempatar.
+     * Si el usuario eligio otro orden, no se toca.
+     */
+    function applyDefaultSort(mBindingParams) {
+        if (!mBindingParams || (mBindingParams.sorter && mBindingParams.sorter.length)) {
+            return;
+        }
+        mBindingParams.sorter = [
+            new Sorter("DocumentDate", false),
+            new Sorter("AccountingDocument", false)
+        ];
+    }
+
+    /**
      * Fija la pagina solicitada en los parametros del binding. Cualquier
      * consulta que NO venga del paginador (Go, orden, filtros, variante)
      * vuelve a la primera pagina.
@@ -1779,6 +1796,7 @@ sap.ui.define([
                     return;
                 }
                 ensureSelectForDynamicColumns(mBindingParams);
+                safeRun(function () { applyDefaultSort(mBindingParams); }, "applyDefaultSort");
                 safeRun(function () { applyPaging(oSmartTable, mBindingParams); }, "applyPaging");
                 refreshForTaxType();
             },

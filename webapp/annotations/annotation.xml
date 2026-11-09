@@ -167,15 +167,37 @@
                             <PropertyValue Property="Value" Path="Total"/>
                             <PropertyValue Property="Label" String="TOTAL"/>
                         </Record>
-                        <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="NoProveedor"/>
-                            <PropertyValue Property="Label" String="No. PROVEEDOR"/>
-                        </Record>
-                        <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="AccountingDocument"/>
-                            <PropertyValue Property="Label" String="Nro. Documento FI"/>
-                        </Record>
+                        <!-- "No. PROVEEDOR" (NoProveedor) y "Nro. Documento FI"
+                             (AccountingDocument) ya NO forman parte del reporte
+                             inicial. El usuario puede agregarlos desde el engranaje
+                             (Configuracion > Columnas); el PDF los sigue incluyendo. -->
                     </Collection>
+                </Annotation>
+
+                <!-- ORDEN INICIAL: ascendente por la columna DIA (DocumentDate).
+                     AccountingDocument desempata para que el orden (y la
+                     paginacion) sea siempre estable. El usuario puede cambiarlo
+                     desde el engranaje (Configuracion > Ordenar). -->
+                <Annotation Term="UI.PresentationVariant">
+                    <Record Type="UI.PresentationVariantType">
+                        <PropertyValue Property="SortOrder">
+                            <Collection>
+                                <Record Type="Common.SortOrderType">
+                                    <PropertyValue Property="Property" PropertyPath="DocumentDate"/>
+                                    <PropertyValue Property="Descending" Bool="false"/>
+                                </Record>
+                                <Record Type="Common.SortOrderType">
+                                    <PropertyValue Property="Property" PropertyPath="AccountingDocument"/>
+                                    <PropertyValue Property="Descending" Bool="false"/>
+                                </Record>
+                            </Collection>
+                        </PropertyValue>
+                        <PropertyValue Property="Visualizations">
+                            <Collection>
+                                <AnnotationPath>@UI.LineItem</AnnotationPath>
+                            </Collection>
+                        </PropertyValue>
+                    </Record>
                 </Annotation>
             </Annotations>
 
