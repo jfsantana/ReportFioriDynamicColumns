@@ -8,6 +8,10 @@
         <edmx:Include Namespace="com.sap.vocabularies.UI.v1"
                       Alias="UI"/>
     </edmx:Reference>
+    <edmx:Reference Uri="https://oasis-tcs.github.io/odata-vocabularies/vocabularies/Org.OData.Capabilities.V1.xml">
+        <edmx:Include Namespace="Org.OData.Capabilities.V1"
+                      Alias="Capabilities"/>
+    </edmx:Reference>
     <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/HTML5.xml">
         <edmx:Include Namespace="com.sap.vocabularies.HTML5.v1"
                       Alias="HTML5"/>
@@ -15,6 +19,30 @@
     <edmx:DataServices>
         <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm"
                 Namespace="local">
+
+            <!-- ============================================================ -->
+            <!-- Periodo contable OBLIGATORIO y de valor unico: el PDF del    -->
+            <!-- backend (accion generarPdf) se genera por un solo periodo.   -->
+            <!-- ============================================================ -->
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.cds_ymqaf_sb_taxrpt_enrich_v2_Entities/TaxReportEnrichedSet">
+                <Annotation Term="Capabilities.FilterRestrictions">
+                    <Record Type="Capabilities.FilterRestrictionsType">
+                        <PropertyValue Property="RequiredProperties">
+                            <Collection>
+                                <PropertyPath>FiscalPeriod</PropertyPath>
+                            </Collection>
+                        </PropertyValue>
+                        <PropertyValue Property="FilterExpressionRestrictions">
+                            <Collection>
+                                <Record Type="Capabilities.FilterExpressionRestrictionType">
+                                    <PropertyValue Property="Property" PropertyPath="FiscalPeriod"/>
+                                    <PropertyValue Property="AllowedExpressions" String="SingleValue"/>
+                                </Record>
+                            </Collection>
+                        </PropertyValue>
+                    </Record>
+                </Annotation>
+            </Annotations>
 
             <!-- ============================================================ -->
             <!-- Entidad de resultados: filtros + columnas del reporte        -->
@@ -25,8 +53,8 @@
                      obligatorios del servicio (considerAnalyticalParameters),
                      por eso NO se listan en UI.SelectionFields: duplicaria
                      los campos. El Tipo de Impuesto es siempre V (sin filtro).
-                     Filtros opcionales (en este orden): Nº Documento,
-                     Periodo fiscal (FiscalPeriod), Fecha de documento
+                     Filtros (en este orden): Nº Documento,
+                     Periodo fiscal (FiscalPeriod, OBLIGATORIO), Fecha de documento
                      (DocumentDate = "Journal Entry Date"), Fecha de
                      contabilizacion, Proveedor y Clase de documento
                      (AccountingDocumentType = "Journal Entry Type").

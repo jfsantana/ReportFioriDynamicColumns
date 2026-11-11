@@ -8,7 +8,7 @@
 -->
 <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData" Version="1.0">
     <edmx:DataServices m:DataServiceVersion="2.0">
-        <Schema xmlns="http://schemas.microsoft.com/ado/2008/09/edm" Namespace="cds_ymqaf_sd_taxrpt_enriched" xml:lang="en" sap:schema-version="1">
+        <Schema xmlns="http://schemas.microsoft.com/ado/2008/09/edm" Namespace="cds_ymqaf_sb_taxrpt_enrich_v2" xml:lang="en" sap:schema-version="1">
             <EntityType Name="I_CompanyCodeType" sap:label="Company Code" sap:value-list="true" sap:content-version="1">
                 <Key>
                     <PropertyRef Name="CompanyCode"/>
@@ -53,7 +53,7 @@
                 <Property Name="C13" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
                 <Property Name="C14" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
                 <Property Name="C15" Type="Edm.Decimal" Precision="23" Scale="3" sap:unit="CompanyCodeCurrency" sap:variable-scale="true"/>
-                <NavigationProperty Name="Parameters" Relationship="cds_ymqaf_sd_taxrpt_enriched.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" FromRole="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" ToRole="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" sap:filterable="false"/>
+                <NavigationProperty Name="Parameters" Relationship="cds_ymqaf_sb_taxrpt_enrich_v2.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" FromRole="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" ToRole="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" sap:filterable="false"/>
             </EntityType>
             <EntityType Name="TaxReportEnrichedParameters" sap:semantics="parameters" sap:content-version="1">
                 <Key>
@@ -62,7 +62,7 @@
                 </Key>
                 <Property Name="P_CompanyCode" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="UpperCase" sap:parameter="mandatory" sap:label="Company Code" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
                 <Property Name="P_FiscalYear" Type="Edm.String" Nullable="false" MaxLength="4" sap:display-format="NonNegative" sap:parameter="mandatory" sap:label="Fiscal Year" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
-                <NavigationProperty Name="Set" Relationship="cds_ymqaf_sd_taxrpt_enriched.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" FromRole="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" ToRole="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
+                <NavigationProperty Name="Set" Relationship="cds_ymqaf_sb_taxrpt_enrich_v2.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" FromRole="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" ToRole="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
             </EntityType>
             <EntityType Name="TablaParametrosType" sap:content-version="1">
                 <Key>
@@ -78,16 +78,16 @@
                 <Property Name="TaxType" Type="Edm.String" MaxLength="1" sap:display-format="UpperCase" sap:label="Tax Type"/>
             </EntityType>
             <Association Name="assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" sap:content-version="1">
-                <End Type="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedParameters" Multiplicity="1" Role="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
-                <End Type="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType" Multiplicity="*" Role="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
+                <End Type="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedParameters" Multiplicity="1" Role="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
+                <End Type="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType" Multiplicity="*" Role="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
             </Association>
-            <EntityContainer Name="cds_ymqaf_sd_taxrpt_enriched_Entities" m:IsDefaultEntityContainer="true" sap:supported-formats="atom json xlsx pdf">
-                <EntitySet Name="I_CompanyCode" EntityType="cds_ymqaf_sd_taxrpt_enriched.I_CompanyCodeType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:searchable="true" sap:content-version="1"/>
-                <EntitySet Name="I_TaxType" EntityType="cds_ymqaf_sd_taxrpt_enriched.I_TaxTypeType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
-                <EntitySet Name="TaxReportEnrichedSet" EntityType="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:addressable="false" sap:content-version="1"/>
-                <EntitySet Name="TaxReportEnriched" EntityType="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedParameters" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:pageable="false" sap:content-version="1"/>
-                <EntitySet Name="TablaParametros" EntityType="cds_ymqaf_sd_taxrpt_enriched.TablaParametrosType" sap:content-version="1"/>
-                <AssociationSet Name="assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" Association="cds_ymqaf_sd_taxrpt_enriched.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1">
+            <EntityContainer Name="cds_ymqaf_sb_taxrpt_enrich_v2_Entities" m:IsDefaultEntityContainer="true" sap:supported-formats="atom json xlsx pdf">
+                <EntitySet Name="I_CompanyCode" EntityType="cds_ymqaf_sb_taxrpt_enrich_v2.I_CompanyCodeType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:searchable="true" sap:content-version="1"/>
+                <EntitySet Name="I_TaxType" EntityType="cds_ymqaf_sb_taxrpt_enrich_v2.I_TaxTypeType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1"/>
+                <EntitySet Name="TaxReportEnrichedSet" EntityType="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:addressable="false" sap:content-version="1"/>
+                <EntitySet Name="TaxReportEnriched" EntityType="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedParameters" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:pageable="false" sap:content-version="1"/>
+                <EntitySet Name="TablaParametros" EntityType="cds_ymqaf_sb_taxrpt_enrich_v2.TablaParametrosType" sap:content-version="1"/>
+                <AssociationSet Name="assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" Association="cds_ymqaf_sb_taxrpt_enrich_v2.assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1">
                     <End EntitySet="TaxReportEnriched" Role="FromRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
                     <End EntitySet="TaxReportEnrichedSet" Role="ToRole_assoc_CC0BF4D03CBFB98C4B6FC5D5A90359A8"/>
                 </AssociationSet>

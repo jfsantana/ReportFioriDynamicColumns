@@ -1831,7 +1831,7 @@ sap.ui.define([
         });
     }
 
-    /** Periodo del filtro con 3 digitos ("1" -> "001"); vacio = todo el anio. */
+    /** Periodo del filtro con 3 digitos ("1" -> "001"). Es obligatorio en el filtro. */
     function getPeriodForBackend() {
         var sPeriod = getFilterValue("FiscalPeriod").trim();
         if (!sPeriod) {
@@ -1930,7 +1930,7 @@ sap.ui.define([
                     FiscalPeriod: getPeriodForBackend()
                 };
 
-                if (!mParams.CompanyCode || !mParams.FiscalYear) {
+                if (!mParams.CompanyCode || !mParams.FiscalYear || !mParams.FiscalPeriod) {
                     MessageToast.show(oBundle.getText("pdfBackendMissingParams"));
                     return;
                 }
