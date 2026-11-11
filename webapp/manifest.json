@@ -111,12 +111,6 @@
               "TaxReportEnrichedSet": {
                 "EntitySet": "TaxReportEnrichedSet",
                 "Actions": {
-                  "exportPdf": {
-                    "id": "exportPdfButton",
-                    "text": "{i18n>pdfButtonText}",
-                    "press": "onExportPdf",
-                    "requiresSelection": false
-                  },
                   "exportPdfBackend": {
                     "id": "exportPdfBackendButton",
                     "text": "{i18n>pdfBackendButtonText}",

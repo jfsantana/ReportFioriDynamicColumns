@@ -17,19 +17,13 @@
         data-sap-ui-resource-roots='{
             "yatl01.reportecolumnasdinamicas": "./"
         }'
-        data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"
+        data-sap-ui-on-init="module:yatl01/reportecolumnasdinamicas/init"
         data-sap-ui-compat-version="edge"
         data-sap-ui-async="true"
         data-sap-ui-frame-options="trusted"
     ></script>
 </head>
 <body class="sapUiBody sapUiSizeCompact" id="content">
-    <div
-        data-sap-ui-component
-        data-name="yatl01.reportecolumnasdinamicas"
-        data-id="container"
-        data-settings='{"id" : "yatl01.reportecolumnasdinamicas"}'
-        data-handle-validation="true"
-    ></div>
+    <!-- El componente lo crea init.js dentro de una pagina con header y boton atras -->
 </body>
 </html>

@@ -23,8 +23,6 @@ sap.ui.define([
     ToggleButton, Table, Column, ColumnListItem, Sorter) {
     "use strict";
 
-    var PDF_LIB_PATH = "yatl01/reportecolumnasdinamicas/ext/lib/";
-
     var FIXED_TAX_TYPE = "V";
 
     // Campos de fecha del reporte y su formato visual (dd.mm.aaaa)
@@ -88,7 +86,6 @@ sap.ui.define([
         mHiddenToolbarIds: {},   // botones de la toolbar ocultos en el resumen
         oMovedToolbar: null,     // toolbar de la SmartTable mientras esta en el resumen
         iDetailGrowFactor: undefined,
-        pPdfLibraries: null,
         oAmountFormatter: null
     };
 
@@ -289,17 +286,6 @@ sap.ui.define([
         return oBundle.getText("titleDefault");
     }
 
-    function getTaxTypeText() {
-        var oBundle = getResourceBundle();
-        if (oState.sTaxType === "V") {
-            return oBundle.getText("taxTypeInput");
-        }
-        if (oState.sTaxType === "A") {
-            return oBundle.getText("taxTypeOutput");
-        }
-        return "";
-    }
-
     /** Clave de columna (C01, C02, ...) de una sap.m.Column de la SmartTable. */
     function getColumnKey(oCol) {
         var vData = oCol.data ? oCol.data("p13nData") : null;
@@ -439,6 +425,74 @@ sap.ui.define([
                 if (oCol.getDemandPopin()) {
                     oCol.setDemandPopin(false);
                 }
+            }
+        });
+    }
+
+    /** Campos numericos fijos con total de pagina (ademas de C01..C99). */
+    var TOTAL_FIELDS = ["importeiva", "total"];
+
+    function isNumericColumnKey(sKey) {
+        var sLower = String(sKey || "").toLowerCase();
+        return /^c\d+$/.test(sLower) || TOTAL_FIELDS.indexOf(sLower) !== -1;
+    }
+
+    /** Pone (o actualiza) el texto del pie de una columna; sin texto lo quita. */
+    function setColumnFooter(oCol, sText) {
+        var oFooter = oCol.getFooter();
+        if (!sText) {
+            if (oFooter) {
+                oCol.destroyFooter();
+            }
+            return;
+        }
+        if (oFooter && oFooter.setText) {
+            if (oFooter.getText() !== sText) {
+                oFooter.setText(sText);
+            }
+            return;
+        }
+        oCol.setFooter(new Text({ text: sText, wrapping: false }).addStyleClass("taxReportPageTotal"));
+    }
+
+    /**
+     * Fila de totales al pie de la tabla: suma de la PAGINA que se esta
+     * viendo para cada columna numerica visible (C01..C99 mapeadas, IVA y
+     * TOTAL). La etiqueta "TOTAL PAGINA" va en la primera columna visible
+     * que no es numerica. Sin filas en la pagina, el pie se quita.
+     */
+    function updatePageTotals() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (!oInner || !oInner.getColumns) {
+            return;
+        }
+        var aRows = (oInner.getItems() || []).map(function (oItem) {
+            var oContext = oItem.getBindingContext();
+            return oContext ? oContext.getObject() : null;
+        }).filter(Boolean);
+        var bLabelPlaced = false;
+
+        oInner.getColumns().forEach(function (oCol) {
+            var sKey = getColumnKey(oCol);
+            if (!aRows.length || !oCol.getVisible()) {
+                setColumnFooter(oCol, "");
+                return;
+            }
+            if (isNumericColumnKey(sKey)) {
+                var fSum = 0;
+                aRows.forEach(function (oRow) {
+                    var fValue = parseFloat(oRow[sKey]);
+                    if (!isNaN(fValue)) {
+                        fSum += fValue;
+                    }
+                });
+                setColumnFooter(oCol, getAmountFormatter().format(Math.round(fSum * 1000) / 1000));
+            } else if (!bLabelPlaced) {
+                bLabelPlaced = true;
+                setColumnFooter(oCol, getResourceBundle().getText("pageTotalLabel"));
+            } else {
+                setColumnFooter(oCol, "");
             }
         });
     }
@@ -868,6 +922,7 @@ sap.ui.define([
             safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
             safeRun(formatDateCells, "formatDateCells");
             safeRun(disableColumnResize, "disableColumnResize");
+            safeRun(updatePageTotals, "updatePageTotals");
             safeRun(updatePager, "updatePager");
         };
         try {
@@ -1428,7 +1483,7 @@ sap.ui.define([
             var aContent = oToolbar.getContent();
             var iPdfIndex = -1;
             aContent.forEach(function (oControl, iIndex) {
-                if (iPdfIndex === -1 && oControl.getId().indexOf("exportPdfButton") !== -1) {
+                if (iPdfIndex === -1 && oControl.getId().indexOf("exportPdfBackendButton") !== -1) {
                     iPdfIndex = iIndex;
                 }
             });
@@ -1464,42 +1519,6 @@ sap.ui.define([
         });
     }
 
-    /* ============================================================ */
-    /* Exportacion a PDF                                        */
-    /* ============================================================ */
-
-    /**
-     * Carga jsPDF y el plugin autotable una sola vez. Son librerias UMD
-     * de terceros: se registran en el loader de UI5 como "shim".
-     */
-    function loadPdfLibraries() {
-        if (!oState.pPdfLibraries) {
-            var mShim = {};
-            mShim[PDF_LIB_PATH + "jspdf.umd.min"] = {
-                amd: false,
-                exports: "jspdf"
-            };
-            mShim[PDF_LIB_PATH + "jspdf.plugin.autotable.min"] = {
-                amd: false,
-                deps: [PDF_LIB_PATH + "jspdf.umd.min"]
-            };
-            sap.ui.loader.config({ shim: mShim });
-            oState.pPdfLibraries = new Promise(function (fnResolve, fnReject) {
-                sap.ui.require([
-                    PDF_LIB_PATH + "jspdf.umd.min",
-                    PDF_LIB_PATH + "jspdf.plugin.autotable.min"
-                ], function () {
-                    if (window.jspdf && window.jspdf.jsPDF) {
-                        fnResolve(window.jspdf.jsPDF);
-                    } else {
-                        fnReject(new Error("jsPDF no quedo disponible en window.jspdf"));
-                    }
-                }, fnReject);
-            });
-        }
-        return oState.pPdfLibraries;
-    }
-
     /** Formato de celda: importes con miles y 2 decimales (sin moneda: va en su columna). */
     function formatCellValue(vValue, bIsAmount) {
         if (vValue === null || vValue === undefined || vValue === "") {
@@ -1514,73 +1533,11 @@ sap.ui.define([
         return String(vValue);
     }
 
-    /** Fecha del registro como dd.mm.aaaa (respaldo si el servicio no trae DocumentDateFormatted). */
-    function formatDocumentDate(oRow) {
-        return oRow.DocumentDateFormatted
-            ? String(oRow.DocumentDateFormatted)
-            : formatDateDDMMYYYY(oRow.DocumentDate);
-    }
-
-    /** TIPO = descripcion del tipo de documento + " - " + codigo SAT (ej. "FACTURA - FACT"). */
-    function formatDocumentType(oRow) {
-        return [oRow.DescTipoDocumento, oRow.TipDocSat]
-            .map(function (sValue) { return String(sValue || "").trim(); })
-            .filter(Boolean)
-            .join(" - ");
-    }
-
     /** Columnas C01..C99 mapeadas para el filtro actual, en orden numerico. */
     function getMappedDynamicKeys() {
         return Object.keys(oState.mParametrosMap || {})
             .filter(function (sKey) { return /^c\d+$/i.test(sKey); })
             .sort(function (a, b) { return parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10); });
-    }
-
-    /**
-     * Columnas del PDF: lista FIJA y en orden FIJO, independiente de las
-     * columnas que el usuario muestre u oculte en la tabla. Los importes
-     * dinamicos son los C01..C99 mapeados, entre PROVEEDOR e IVA. Todos los
-     * encabezados del PDF son azules (headStyles).
-     * Cada columna: header, value(oRow, iIndex) para texto o key + isAmount
-     * para importes, dynamic y select (campos OData).
-     */
-    function getPdfColumns() {
-        var aColumns = [
-            { header: "#", value: function (oRow, iIndex) { return String(iIndex + 1); }, select: [] },
-            { header: "DÍA", value: formatDocumentDate, select: ["DocumentDateFormatted", "DocumentDate"] },
-            { header: "TIPO", value: formatDocumentType, select: ["DescTipoDocumento", "TipDocSat"] },
-            { header: "SERIE", key: "Serie" },
-            { header: "NO. DOCUMENTO", key: "DocumentReferenceID" },
-            { header: "NIT", key: "Nit" },
-            { header: "PROVEEDOR", key: "Proveedor", isTotalLabel: true }
-        ];
-        getMappedDynamicKeys().forEach(function (sKey) {
-            aColumns.push({
-                header: oState.mParametrosMap[sKey],
-                key: sKey.toUpperCase(),
-                isAmount: true,
-                dynamic: true
-            });
-        });
-        aColumns.push(
-            { header: "IVA", key: "ImporteIVA", isAmount: true },
-            { header: "TOTAL", key: "Total", isAmount: true },
-            { header: "No. PROVEEDOR", key: "NoProveedor" },
-            { header: "Nro. Documento FI", key: "AccountingDocument" }
-        );
-        return aColumns.map(function (oCol) {
-            oCol.isAmount = !!oCol.isAmount;
-            oCol.dynamic = !!oCol.dynamic;
-            oCol.select = oCol.select || [oCol.key];
-            return oCol;
-        });
-    }
-
-    /** Valor ya formateado de una columna del PDF para una fila. */
-    function getPdfCellValue(oCol, oRow, iIndex) {
-        return oCol.value
-            ? oCol.value(oRow, iIndex)
-            : formatCellValue(oRow[oCol.key], oCol.isAmount);
     }
 
     /**
@@ -1613,165 +1570,6 @@ sap.ui.define([
                 error: fnReject
             });
         });
-    }
-
-    function collectReportData() {
-        var oSmartTable = getSmartTable();
-        if (!oSmartTable) {
-            return Promise.reject(new Error("No se encontro la tabla del reporte"));
-        }
-        var aColumns = getPdfColumns();
-        var aSelect = ["CompanyCodeCurrency"];
-        aColumns.forEach(function (oCol) {
-            oCol.select.forEach(function (sField) {
-                if (aSelect.indexOf(sField) === -1) {
-                    aSelect.push(sField);
-                }
-            });
-        });
-
-        return requestAllRows(oSmartTable, aSelect).then(function (aRawRows) {
-            var aRows = aRawRows.map(function (oRow, iIndex) {
-                return aColumns.map(function (oCol) {
-                    return getPdfCellValue(oCol, oRow, iIndex);
-                });
-            });
-            return {
-                title: getReportTitle(),
-                taxType: oState.sTaxType,
-                taxTypeText: getTaxTypeText(),
-                recordCount: String(aRows.length),
-                companyCode: getFilterValue("P_CompanyCode"),
-                fiscalYear: getFilterValue("P_FiscalYear"),
-                columns: aColumns,
-                rows: aRows,
-                rawRows: aRawRows
-            };
-        });
-    }
-
-    /**
-     * Fila de totales para el pie del PDF. Solo totaliza si todas las
-     * filas comparten la misma moneda. Devuelve null si no aplica.
-     */
-    function buildTotalsRow(oData) {
-        if (!oData.rows.length || !oData.columns.some(function (oCol) { return oCol.isAmount; })) {
-            return null;
-        }
-        var mCurrencies = {};
-        oData.rawRows.forEach(function (oRow) {
-            if (oRow && oRow.CompanyCodeCurrency) {
-                mCurrencies[oRow.CompanyCodeCurrency] = true;
-            }
-        });
-        var aCurrencies = Object.keys(mCurrencies);
-        if (aCurrencies.length > 1) {
-            return null;
-        }
-
-        var aTotals = oData.columns.map(function () { return 0; });
-        oData.rawRows.forEach(function (oRow) {
-            oData.columns.forEach(function (oCol, iIndex) {
-                if (oCol.isAmount) {
-                    var f = parseFloat(oRow[oCol.key]);
-                    if (!isNaN(f)) {
-                        aTotals[iIndex] += f;
-                    }
-                }
-            });
-        });
-
-        return [oData.columns.map(function (oCol, iIndex) {
-            if (oCol.isAmount) {
-                return getAmountFormatter().format(aTotals[iIndex]);
-            }
-            // La etiqueta "TOTAL" va en la columna PROVEEDOR
-            return oCol.isTotalLabel ? "TOTAL" : "";
-        })];
-    }
-
-    function buildFileName(oData) {
-        var aParts = ["LibroDeCompras"];
-        if (oData.taxTypeText) {
-            aParts.push(oData.taxTypeText.replace(/\s+/g, ""));
-        }
-        if (oData.companyCode) {
-            aParts.push(oData.companyCode);
-        }
-        if (oData.fiscalYear) {
-            aParts.push(oData.fiscalYear);
-        }
-        var oNow = new Date();
-        aParts.push(oNow.getFullYear()
-            + ("0" + (oNow.getMonth() + 1)).slice(-2)
-            + ("0" + oNow.getDate()).slice(-2)
-            + "_"
-            + ("0" + oNow.getHours()).slice(-2)
-            + ("0" + oNow.getMinutes()).slice(-2));
-        return aParts.join("_") + ".pdf";
-    }
-
-    /**
-     * Genera el PDF con jsPDF + autotable: encabezado con titulo y
-     * contexto, tabla con las columnas visibles, totales y numeracion.
-     */
-    function generatePdf(oData) {
-        var JsPDF = window.jspdf.jsPDF;
-        var oDoc = new JsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-        var iPageWidth = oDoc.internal.pageSize.getWidth();
-        var iPageHeight = oDoc.internal.pageSize.getHeight();
-        var iMargin = 40;
-
-        oDoc.setFontSize(14);
-        oDoc.setTextColor(10, 110, 209);
-        oDoc.text(oData.title, iMargin, 42);
-
-        oDoc.setFontSize(9);
-        oDoc.setTextColor(90);
-        var aSubtitle = [];
-        if (oData.companyCode) {
-            aSubtitle.push("Sociedad: " + oData.companyCode);
-        }
-        if (oData.fiscalYear) {
-            aSubtitle.push("Ejercicio: " + oData.fiscalYear);
-        }
-        if (oData.taxTypeText) {
-            aSubtitle.push(getResourceBundle().getText("pdfTaxTypeLabel") + ": " + oData.taxTypeText);
-        }
-        aSubtitle.push("Registros: " + oData.recordCount);
-        aSubtitle.push("Emitido: " + new Date().toLocaleString());
-        oDoc.text(aSubtitle.join("    |    "), iMargin, 58);
-
-        var oColumnStyles = {};
-        oData.columns.forEach(function (oCol, iIndex) {
-            if (oCol.isAmount) {
-                oColumnStyles[iIndex] = { halign: "right" };
-            }
-        });
-
-        oDoc.autoTable({
-            head: [oData.columns.map(function (oCol) { return oCol.header; })],
-            body: oData.rows,
-            foot: buildTotalsRow(oData),
-            startY: 70,
-            margin: { left: iMargin, right: iMargin },
-            styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
-            headStyles: { fillColor: [10, 110, 209], textColor: 255, fontStyle: "bold" },
-            footStyles: { fillColor: [230, 240, 250], textColor: 30, fontStyle: "bold" },
-            alternateRowStyles: { fillColor: [245, 247, 250] },
-            columnStyles: oColumnStyles,
-            showFoot: "lastPage"
-        });
-
-        var iTotalPages = oDoc.internal.getNumberOfPages();
-        for (var i = 1; i <= iTotalPages; i++) {
-            oDoc.setPage(i);
-            oDoc.setFontSize(8);
-            oDoc.setTextColor(130);
-            oDoc.text("Página " + i + " de " + iTotalPages, iPageWidth - iMargin, iPageHeight - 12, { align: "right" });
-        }
-
-        oDoc.save(buildFileName(oData));
     }
 
     /* ============================================================ */
@@ -1912,37 +1710,8 @@ sap.ui.define([
             },
 
             /**
-             * Accion "Exportar PDF" de la toolbar (manifest.json ->
-             * controllerExtensions -> Actions -> exportPdf -> press).
-             */
-            onExportPdf: function () {
-                var oBundle = getResourceBundle();
-
-                BusyIndicator.show(0);
-                // Se asegura que Tipo de Impuesto/titulo/encabezados esten al dia
-                refreshForTaxType()
-                    .then(loadPdfLibraries)
-                    .then(collectReportData)
-                    .then(function (oData) {
-                        if (!oData.rows.length) {
-                            MessageToast.show(oBundle.getText("pdfNoData"));
-                            return;
-                        }
-                        generatePdf(oData);
-                    })
-                    .catch(function (oError) {
-                        console.error("[TaxReport] Error al generar PDF:", oError);
-                        MessageBox.error(oBundle.getText("pdfError"));
-                    })
-                    .finally(function () {
-                        BusyIndicator.hide();
-                    });
-            },
-
-            /**
-             * Accion "PDF (backend)" - prueba piloto. Genera el PDF con el
-             * Adobe Form del backend (accion RAP generarPdf, OData V4) y lo
-             * descarga. El boton "Exportar PDF" original no cambia.
+             * Accion "Descargar PDF". Genera el PDF con el Adobe Form del
+             * backend (accion RAP generarPdf, OData V4) y lo descarga.
              */
             onExportPdfBackend: function () {
                 var oBundle = getResourceBundle();
