@@ -1753,6 +1753,94 @@ sap.ui.define([
     }
 
     /* ============================================================ */
+    /* PDF generado en backend (piloto): accion RAP generarPdf      */
+    /* del servicio OData V4 + descarga de PdfStream(<Guid>)/PdfData */
+    /* ============================================================ */
+
+    var PDF_V4_SERVICE = "/sap/opu/odata4/sap/ymqaf_sb_taxrpt_enriched/srvd/sap/ymqaf_sd_taxrpt_enriched/0001/";
+
+    /**
+     * Lee el $metadata del servicio V4 y, en la misma llamada, pide el
+     * token CSRF. Devuelve { token, namespace }. El namespace se necesita
+     * para el nombre completo de la accion (namespace.generarPdf).
+     */
+    function fetchV4TokenAndNamespace() {
+        return fetch(PDF_V4_SERVICE + "$metadata", {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { "X-CSRF-Token": "Fetch" }
+        }).then(function (oResponse) {
+            if (!oResponse.ok) {
+                throw new Error("$metadata HTTP " + oResponse.status);
+            }
+            var sToken = oResponse.headers.get("X-CSRF-Token");
+            return oResponse.text().then(function (sXml) {
+                var aMatch = /<Schema[^>]*\sNamespace="([^"]+)"/.exec(sXml);
+                if (!aMatch) {
+                    throw new Error("Namespace no encontrado en $metadata");
+                }
+                return { token: sToken, namespace: aMatch[1] };
+            });
+        });
+    }
+
+    /** Llama a la accion estatica generarPdf y devuelve el registro creado. */
+    function callGenerarPdf(oCtx, mParams) {
+        return fetch(PDF_V4_SERVICE + "PdfStream/" + oCtx.namespace + ".generarPdf", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "X-CSRF-Token": oCtx.token,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify(mParams)
+        }).then(function (oResponse) {
+            return oResponse.json().catch(function () { return {}; }).then(function (oBody) {
+                if (!oResponse.ok) {
+                    var sMsg = oBody && oBody.error && oBody.error.message;
+                    throw new Error(sMsg || ("generarPdf HTTP " + oResponse.status));
+                }
+                return oBody;
+            });
+        });
+    }
+
+    /** Descarga el binario del PDF y lo guarda con el nombre indicado. */
+    function downloadPdfStream(sGuid, sFileName) {
+        return fetch(PDF_V4_SERVICE + "PdfStream(" + sGuid + ")/PdfData", {
+            method: "GET",
+            credentials: "same-origin"
+        }).then(function (oResponse) {
+            if (!oResponse.ok) {
+                throw new Error("PdfData HTTP " + oResponse.status);
+            }
+            return oResponse.blob();
+        }).then(function (oBlob) {
+            if (!oBlob.size) {
+                throw new Error("El PDF llego vacio");
+            }
+            var sUrl = URL.createObjectURL(oBlob);
+            var oLink = document.createElement("a");
+            oLink.href = sUrl;
+            oLink.download = sFileName || "libro de compras.pdf";
+            document.body.appendChild(oLink);
+            oLink.click();
+            document.body.removeChild(oLink);
+            setTimeout(function () { URL.revokeObjectURL(sUrl); }, 1000);
+        });
+    }
+
+    /** Periodo del filtro con 3 digitos ("1" -> "001"); vacio = todo el anio. */
+    function getPeriodForBackend() {
+        var sPeriod = getFilterValue("FiscalPeriod").trim();
+        if (!sPeriod) {
+            return "";
+        }
+        return ("000" + sPeriod).slice(-3);
+    }
+
+    /* ============================================================ */
     /* Controlador de la extension                                  */
     /* ============================================================ */
 
@@ -1823,6 +1911,44 @@ sap.ui.define([
                     .catch(function (oError) {
                         console.error("[TaxReport] Error al generar PDF:", oError);
                         MessageBox.error(oBundle.getText("pdfError"));
+                    })
+                    .finally(function () {
+                        BusyIndicator.hide();
+                    });
+            },
+
+            /**
+             * Accion "PDF (backend)" - prueba piloto. Genera el PDF con el
+             * Adobe Form del backend (accion RAP generarPdf, OData V4) y lo
+             * descarga. El boton "Exportar PDF" original no cambia.
+             */
+            onExportPdfBackend: function () {
+                var oBundle = getResourceBundle();
+                var mParams = {
+                    CompanyCode: getFilterValue("P_CompanyCode").trim().toUpperCase(),
+                    FiscalYear: getFilterValue("P_FiscalYear").trim(),
+                    FiscalPeriod: getPeriodForBackend()
+                };
+
+                if (!mParams.CompanyCode || !mParams.FiscalYear) {
+                    MessageToast.show(oBundle.getText("pdfBackendMissingParams"));
+                    return;
+                }
+
+                BusyIndicator.show(0);
+                fetchV4TokenAndNamespace()
+                    .then(function (oCtx) {
+                        return callGenerarPdf(oCtx, mParams);
+                    })
+                    .then(function (oResult) {
+                        if (!oResult || !oResult.Guid) {
+                            throw new Error("generarPdf no devolvio Guid");
+                        }
+                        return downloadPdfStream(oResult.Guid, oResult.FileName);
+                    })
+                    .catch(function (oError) {
+                        console.error("[TaxReport] Error PDF backend:", oError);
+                        MessageBox.error(oBundle.getText("pdfBackendError") + "\n\n" + (oError && oError.message || ""));
                     })
                     .finally(function () {
                         BusyIndicator.hide();

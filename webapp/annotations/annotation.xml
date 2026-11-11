@@ -19,7 +19,7 @@
             <!-- ============================================================ -->
             <!-- Entidad de resultados: filtros + columnas del reporte        -->
             <!-- ============================================================ -->
-            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType">
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType">
 
                 <!-- FILTROS: Sociedad y Ejercicio ya salen como parametros
                      obligatorios del servicio (considerAnalyticalParameters),
@@ -202,12 +202,12 @@
             </Annotations>
 
             <!-- Etiqueta del filtro/columna Nº Documento -->
-            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/AccountingDocument">
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType/AccountingDocument">
                 <Annotation Term="Common.Label" String="Nº Documento"/>
             </Annotations>
 
             <!-- TIPO: muestra el codigo SAT con su descripcion ("FACTURA (FACT)") -->
-            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/TipDocSat">
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType/TipDocSat">
                 <Annotation Term="Common.Text" Path="DescTipoDocumento">
                     <Annotation Term="UI.TextArrangement" EnumMember="UI.TextArrangementType/TextFirst"/>
                 </Annotation>
@@ -216,7 +216,7 @@
             <!-- AYUDA DE BUSQUEDA (value help) de Sociedad: el parametro
                  P_CompanyCode no trae ValueList desde el backend, se enlaza
                  a la entidad I_CompanyCode que el servicio ya expone. -->
-            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedParameters/P_CompanyCode">
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedParameters/P_CompanyCode">
                 <Annotation Term="Common.ValueList">
                     <Record Type="Common.ValueListType">
                         <PropertyValue Property="Label" String="Company Code"/>
@@ -245,10 +245,10 @@
 
             <!-- Las copias "normales" de los parametros (columnas clave de la
                  entidad de resultados) no deben ofrecerse como filtros. -->
-            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/P_CompanyCode">
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType/P_CompanyCode">
                 <Annotation Term="UI.HiddenFilter" Bool="true"/>
             </Annotations>
-            <Annotations Target="cds_ymqaf_sd_taxrpt_enriched.TaxReportEnrichedType/P_FiscalYear">
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType/P_FiscalYear">
                 <Annotation Term="UI.HiddenFilter" Bool="true"/>
             </Annotations>
 

@@ -17,7 +17,7 @@
     },
     "dataSources": {
       "mainService": {
-        "uri": "/sap/opu/odata/sap/YMQAF_SB_TAXRPT_ENRICH_V2/",
+        "uri": "/sap/opu/odata/sap/YMQAF_SB_TAXRPT_ENRICH_V2;v=2/",
         "type": "OData",
         "settings": {
           "annotations": [
@@ -115,6 +115,12 @@
                     "id": "exportPdfButton",
                     "text": "{i18n>pdfButtonText}",
                     "press": "onExportPdf",
+                    "requiresSelection": false
+                  },
+                  "exportPdfBackend": {
+                    "id": "exportPdfBackendButton",
+                    "text": "{i18n>pdfBackendButtonText}",
+                    "press": "onExportPdfBackend",
                     "requiresSelection": false
                   }
                 }
