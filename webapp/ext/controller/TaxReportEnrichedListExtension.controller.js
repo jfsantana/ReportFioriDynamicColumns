@@ -1362,6 +1362,11 @@ sap.ui.define([
 
         oState.sSummaryMode = sMode;
         syncSummaryButtons();
+        if (bOn && oState.oSummaryInfoText) {
+            var oBundle = getResourceBundle();
+            oState.oSummaryInfoText.setText(oBundle.getText("summaryInfo",
+                [oBundle.getText(SUMMARY_MODES[sMode].buttonKey)]));
+        }
         oSmartTable.toggleStyleClass("taxReportSummaryMode", bOn);
         oState.oSummaryTable.setVisible(bOn);
         if (bOn !== bWasOn) {
@@ -1398,6 +1403,23 @@ sap.ui.define([
             noDataText: oBundle.getText("summaryNoData")
         });
         oState.oSummaryTable.addStyleClass("taxReportSummaryTable");
+
+        // Barra informativa del resumen: indica que vista de totales esta
+        // activa y ofrece un boton visible para regresar al detalle.
+        oState.oSummaryInfoText = new Text({ wrapping: false });
+        oState.oSummaryTable.setInfoToolbar(new OverflowToolbar({
+            design: "Info",
+            content: [
+                oState.oSummaryInfoText,
+                new ToolbarSpacer(),
+                new Button({
+                    text: oBundle.getText("summaryBackButton"),
+                    icon: "sap-icon://nav-back",
+                    type: "Emphasized",
+                    press: function () { setSummaryMode(""); }
+                })
+            ]
+        }));
         oSmartTable.addItem(oState.oSummaryTable);
 
         var oToolbar = oSmartTable.getCustomToolbar && oSmartTable.getCustomToolbar();
