@@ -234,12 +234,9 @@
                 <Annotation Term="Common.Label" String="Nº Documento"/>
             </Annotations>
 
-            <!-- TIPO: muestra el codigo SAT con su descripcion ("FACTURA (FACT)") -->
-            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType/TipDocSat">
-                <Annotation Term="Common.Text" Path="DescTipoDocumento">
-                    <Annotation Term="UI.TextArrangement" EnumMember="UI.TextArrangementType/TextFirst"/>
-                </Annotation>
-            </Annotations>
+            <!-- TIPO: en el detalle se muestra SOLO el codigo SAT ("FEL"), sin descripcion.
+                 La descripcion concatenada ("FACTURA (FACT)") se arma en el controller solo
+                 para el layout "Total por Tipo de Documento" (formatTypeLabel). -->
 
             <!-- AYUDA DE BUSQUEDA (value help) de Sociedad: el parametro
                  P_CompanyCode no trae ValueList desde el backend, se enlaza

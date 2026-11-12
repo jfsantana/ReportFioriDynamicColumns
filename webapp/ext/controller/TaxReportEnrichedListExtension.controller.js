@@ -31,9 +31,11 @@ sap.ui.define([
 
     // Anchos fijos (solo visualizacion en el navegador). Unidades "rem" simples:
     // NIT ~12 caracteres y Serie ~15 caracteres, mas el relleno de la celda.
+    // TIPO muestra solo el codigo SAT (FEL, FACT, ...: ~4 caracteres).
     var COLUMN_WIDTHS = {
         nit: "9rem",
-        serie: "10.5rem"
+        serie: "10.5rem",
+        tipdocsat: "5rem"
     };
 
     // Anchos para el modo "tabla completa con scroll horizontal" (escritorio y
@@ -42,7 +44,6 @@ sap.ui.define([
     // en lugar de que las columnas pasen al area emergente (popin).
     var SCROLL_COLUMN_WIDTHS = {
         documentdate: "7rem",
-        tipdocsat: "15rem",
         documentreferenceid: "9rem",
         proveedor: "18rem",
         importeiva: "8rem",
