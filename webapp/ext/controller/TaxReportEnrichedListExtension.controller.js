@@ -567,9 +567,17 @@ sap.ui.define([
         }
         try {
             document.title = sTitle;
-            if (window.sap && sap.ushell && sap.ushell.Container && sap.ushell.Container.getServiceAsync) {
+            // Esta funcion se ejecuta en cada redibujado: el titulo del shell
+            // se actualiza solo cuando cambia, y si el servicio ShellUIService
+            // no existe (Launchpad de pruebas local) no se vuelve a intentar
+            // ni queda una promesa rechazada sin capturar.
+            if (oState.sShellTitle !== sTitle && !oState.bShellTitleFailed
+                && window.sap && sap.ushell && sap.ushell.Container && sap.ushell.Container.getServiceAsync) {
+                oState.sShellTitle = sTitle;
                 sap.ushell.Container.getServiceAsync("ShellUIService").then(function (oService) {
                     oService.setTitle(sTitle);
+                }).catch(function () {
+                    oState.bShellTitleFailed = true;
                 });
             }
         } catch (oError) {
@@ -1573,19 +1581,47 @@ sap.ui.define([
     }
 
     /* ============================================================ */
-    /* PDF generado en backend (piloto): accion RAP generarPdf      */
-    /* del servicio OData V4 + descarga de PdfStream(<Guid>)/PdfData */
+    /* PDF generado en backend: accion RAP generarPdf del servicio  */
+    /* OData V2 YMQA13FISB002 (entidad PdfStream). En V2 la accion  */
+    /* es un FunctionImport (POST) y el binario se lee con $value.  */
     /* ============================================================ */
 
-    var PDF_V4_SERVICE = "/sap/opu/odata4/sap/ymqaf_sb_taxrpt_enriched/srvd/sap/ymqaf_sd_taxrpt_enriched/0001/";
+    var PDF_SERVICE = "/sap/opu/odata/sap/YMQA13FISB002/";
+    var PDF_ACTION = "generarPdf";
+    var PDF_ENTITY_SET = "PdfStream";
+    var PDF_MEDIA_PROPERTY = "PdfData";
+    var EDM_METADATA_NS = "http://schemas.microsoft.com/ado/2007/08/dataservices/metadata";
+
+    function localName(sName) {
+        return String(sName || "").split(".").pop();
+    }
+
+    /** Literal OData V2 para la URL: Edm.String entre comillas, Edm.Guid como guid'...'. */
+    function toODataLiteral(sType, vValue) {
+        var sValue = String(vValue);
+        if (sType === "Edm.Guid") {
+            return "guid'" + sValue + "'";
+        }
+        if (sType === "Edm.String" || !sType) {
+            return "'" + sValue.replace(/'/g, "''") + "'";
+        }
+        return sValue;
+    }
+
+    function findByAttribute(oDoc, sTag, sAttribute, sValue) {
+        return Array.prototype.slice.call(oDoc.getElementsByTagName(sTag)).filter(function (oNode) {
+            return String(oNode.getAttribute(sAttribute)).toLowerCase() === String(sValue).toLowerCase();
+        })[0];
+    }
 
     /**
-     * Lee el $metadata del servicio V4 y, en la misma llamada, pide el
-     * token CSRF. Devuelve { token, namespace }. El namespace se necesita
-     * para el nombre completo de la accion (namespace.generarPdf).
+     * Lee el $metadata del servicio V2 y, en la misma llamada, pide el token
+     * CSRF. Del metadata toma: el FunctionImport generarPdf (nombre y
+     * parametros) y la clave de la entidad PdfStream (nombre, tipo y si es
+     * un registro de medios). Devuelve { token, action, entity }.
      */
-    function fetchV4TokenAndNamespace() {
-        return fetch(PDF_V4_SERVICE + "$metadata", {
+    function loadPdfService() {
+        return fetch(PDF_SERVICE + "$metadata", {
             method: "GET",
             credentials: "same-origin",
             headers: { "X-CSRF-Token": "Fetch" }
@@ -1595,40 +1631,84 @@ sap.ui.define([
             }
             var sToken = oResponse.headers.get("X-CSRF-Token");
             return oResponse.text().then(function (sXml) {
-                var aMatch = /<Schema[^>]*\sNamespace="([^"]+)"/.exec(sXml);
-                if (!aMatch) {
-                    throw new Error("Namespace no encontrado en $metadata");
+                var oDoc = new DOMParser().parseFromString(sXml, "application/xml");
+                var oImport = findByAttribute(oDoc, "FunctionImport", "Name", PDF_ACTION);
+                if (!oImport) {
+                    throw new Error("La accion " + PDF_ACTION + " no esta publicada en " + PDF_SERVICE);
                 }
-                return { token: sToken, namespace: aMatch[1] };
+                var aParams = Array.prototype.slice.call(oImport.getElementsByTagName("Parameter")).map(function (oNode) {
+                    return { name: oNode.getAttribute("Name"), type: oNode.getAttribute("Type") };
+                });
+
+                var oSet = findByAttribute(oDoc, "EntitySet", "Name", PDF_ENTITY_SET);
+                if (!oSet) {
+                    throw new Error("La entidad " + PDF_ENTITY_SET + " no esta publicada en " + PDF_SERVICE);
+                }
+                var oType = findByAttribute(oDoc, "EntityType", "Name", localName(oSet.getAttribute("EntityType")));
+                var sKeyName = oType.getElementsByTagName("PropertyRef")[0].getAttribute("Name");
+                var sKeyType = findByAttribute(oType, "Property", "Name", sKeyName).getAttribute("Type");
+
+                return {
+                    token: sToken,
+                    action: { name: oImport.getAttribute("Name"), params: aParams },
+                    entity: {
+                        keyName: sKeyName,
+                        keyType: sKeyType,
+                        hasStream: oType.getAttributeNS(EDM_METADATA_NS, "HasStream") === "true"
+                    }
+                };
             });
         });
     }
 
-    /** Llama a la accion estatica generarPdf y devuelve el registro creado. */
-    function callGenerarPdf(oCtx, mParams) {
-        return fetch(PDF_V4_SERVICE + "PdfStream/" + oCtx.namespace + ".generarPdf", {
+    /**
+     * Llama al FunctionImport generarPdf (POST, parametros en la URL) y
+     * devuelve el registro PdfStream creado.
+     */
+    function callGenerarPdf(oSvc, mParams) {
+        var mByName = {};
+        Object.keys(mParams).forEach(function (sKey) { mByName[sKey.toLowerCase()] = mParams[sKey]; });
+        var aQuery = [];
+        oSvc.action.params.forEach(function (oParam) {
+            var vValue = mByName[String(oParam.name).toLowerCase()];
+            if (vValue !== undefined) {
+                aQuery.push(encodeURIComponent(oParam.name) + "=" + encodeURIComponent(toODataLiteral(oParam.type, vValue)));
+            }
+        });
+        return fetch(PDF_SERVICE + oSvc.action.name + "?" + aQuery.join("&"), {
             method: "POST",
             credentials: "same-origin",
             headers: {
-                "X-CSRF-Token": oCtx.token,
-                "Content-Type": "application/json",
+                "X-CSRF-Token": oSvc.token,
                 "Accept": "application/json"
-            },
-            body: JSON.stringify(mParams)
+            }
         }).then(function (oResponse) {
             return oResponse.json().catch(function () { return {}; }).then(function (oBody) {
                 if (!oResponse.ok) {
-                    var sMsg = oBody && oBody.error && oBody.error.message;
-                    throw new Error(sMsg || ("generarPdf HTTP " + oResponse.status));
+                    var oMessage = oBody && oBody.error && oBody.error.message;
+                    throw new Error((oMessage && (oMessage.value || oMessage)) || (PDF_ACTION + " HTTP " + oResponse.status));
                 }
-                return oBody;
+                var oData = oBody && oBody.d;
+                if (oData && oData.results) {
+                    return oData.results[0];
+                }
+                return (oData && oData[oSvc.action.name]) || oData;
             });
         });
     }
 
-    /** Descarga el binario del PDF y lo guarda con el nombre indicado. */
-    function downloadPdfStream(sGuid, sFileName) {
-        return fetch(PDF_V4_SERVICE + "PdfStream(" + sGuid + ")/PdfData", {
+    /**
+     * Descarga el binario del PDF y lo guarda con el nombre indicado. La URL
+     * se arma relativa (no con media_src, que puede traer otro host/puerto).
+     */
+    function downloadPdfStream(oSvc, oRecord) {
+        var vKey = oRecord && oRecord[oSvc.entity.keyName];
+        if (!vKey) {
+            throw new Error("generarPdf no devolvio la clave (" + oSvc.entity.keyName + ")");
+        }
+        var sPath = PDF_SERVICE + PDF_ENTITY_SET + "(" + toODataLiteral(oSvc.entity.keyType, vKey) + ")/"
+            + (oSvc.entity.hasStream ? "$value" : PDF_MEDIA_PROPERTY + "/$value");
+        return fetch(sPath, {
             method: "GET",
             credentials: "same-origin"
         }).then(function (oResponse) {
@@ -1643,7 +1723,7 @@ sap.ui.define([
             var sUrl = URL.createObjectURL(oBlob);
             var oLink = document.createElement("a");
             oLink.href = sUrl;
-            oLink.download = sFileName || "libro de compras.pdf";
+            oLink.download = oRecord.FileName || "libro de compras.pdf";
             document.body.appendChild(oLink);
             oLink.click();
             document.body.removeChild(oLink);
@@ -1711,7 +1791,8 @@ sap.ui.define([
 
             /**
              * Accion "Descargar PDF". Genera el PDF con el Adobe Form del
-             * backend (accion RAP generarPdf, OData V4) y lo descarga.
+             * backend (accion RAP generarPdf, servicio OData V2
+             * YMQA13FISB002, entidad PdfStream) y lo descarga.
              */
             onExportPdfBackend: function () {
                 var oBundle = getResourceBundle();
@@ -1727,15 +1808,17 @@ sap.ui.define([
                 }
 
                 BusyIndicator.show(0);
-                fetchV4TokenAndNamespace()
-                    .then(function (oCtx) {
-                        return callGenerarPdf(oCtx, mParams);
+                var oPdfService;
+                loadPdfService()
+                    .then(function (oSvc) {
+                        oPdfService = oSvc;
+                        return callGenerarPdf(oSvc, mParams);
                     })
-                    .then(function (oResult) {
-                        if (!oResult || !oResult.Guid) {
-                            throw new Error("generarPdf no devolvio Guid");
+                    .then(function (oRecord) {
+                        if (!oRecord) {
+                            throw new Error("generarPdf no devolvio el registro del PDF");
                         }
-                        return downloadPdfStream(oResult.Guid, oResult.FileName);
+                        return downloadPdfStream(oPdfService, oRecord);
                     })
                     .catch(function (oError) {
                         console.error("[TaxReport] Error PDF backend:", oError);
