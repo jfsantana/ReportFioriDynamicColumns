@@ -29,7 +29,7 @@ server:
       afterMiddleware: fiori-tools-appreload
       configuration:
         flp:
-          theme: sap_horizon
+          theme: sap_fiori_3
         test:
           - framework: OPA5
             path: /test/integration/opaTests.qunit.html
