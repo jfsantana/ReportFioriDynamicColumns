@@ -335,6 +335,26 @@ sap.ui.define([
         }
     }
 
+    /**
+     * Columna obligatoria: siempre visible. Cualquier intento de ocultarla
+     * (Configuracion > Columnas, variantes) se ignora.
+     */
+    function lockColumnVisible(oCol) {
+        if (!oCol.__taxPinned) {
+            var oProto = Object.getPrototypeOf(oCol);
+            var fnSetVisible = oProto.setVisible;
+            var fnSetProperty = oProto.setProperty;
+            oCol.__taxPinned = true;
+            oCol.setVisible = function () {
+                return fnSetVisible.call(this, true);
+            };
+            oCol.setProperty = function (sName, vValue, bSuppressInvalidate) {
+                return fnSetProperty.call(this, sName, sName === "visible" ? true : vValue, bSuppressInvalidate);
+            };
+        }
+        oCol.setVisible(true);
+    }
+
     /** No se permite cambiar el ancho de las columnas. */
     function disableColumnResize() {
         var oSmartTable = getSmartTable();
@@ -524,6 +544,11 @@ sap.ui.define([
         aColumns.forEach(function (oCol) {
             var sKey = getColumnKey(oCol).toLowerCase();
             var sDesc = mMap[sKey];
+
+            // NO. DOCUMENTO: columna obligatoria, no se puede ocultar
+            if (sKey === "documentreferenceid") {
+                lockColumnVisible(oCol);
+            }
 
             // Columnas dinamicas (C01..C15): sin fila en TablaParametros para el
             // filtro actual -> no deben aparecer.

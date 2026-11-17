@@ -89,7 +89,9 @@
                 <!-- TABLA: Columnas del reporte (C01..C15 se renombran dinamicamente) -->
                 <Annotation Term="UI.LineItem">
                     <Collection>
-                        <!-- Orden del Libro de Compras (el "#" correlativo solo existe en el PDF) -->
+                        <!-- Orden del Libro de Compras (el "#" correlativo solo existe en el PDF).
+                             NO. DOCUMENTO va despues de SERIE y no se puede ocultar (el
+                             controller bloquea su visibilidad: lockColumnVisible). -->
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="DocumentDate"/>
                             <PropertyValue Property="Label" String="DÍA"/>
