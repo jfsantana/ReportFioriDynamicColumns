@@ -306,6 +306,27 @@ sap.ui.define([
     }
 
     /**
+     * Campos que pueden verse en la tabla o agregarse desde Configuracion >
+     * Columnas (minusculas). Cualquier otra columna de la entidad se desactiva
+     * (no aparece en la tabla ni en el dialogo). Las C01..C15 se rigen por
+     * TablaParametros y se tratan aparte.
+     */
+    var ALLOWED_COLUMNS = [
+        // Columnas del reporte
+        "documentdate", "tipdocsat", "serie", "documentreferenceid", "nit", "proveedor",
+        "importeiva", "total",
+        // Campos opcionales que el usuario puede agregar
+        "supplier", "postingdate", "fiscalperiod", "accountingdocumenttype", "fiscalyear",
+        "taxitem", "taxcode", "taxcodename", "supplierpoliza",
+        "desctipodocumento", "companycode", "trataespecialpoliza"
+    ];
+
+    function isAllowedColumnKey(sKey) {
+        var sLower = String(sKey).toLowerCase();
+        return /^c\d+$/.test(sLower) || ALLOWED_COLUMNS.indexOf(sLower) !== -1;
+    }
+
+    /**
      * Oculta la columna y la BLOQUEA: cualquier intento posterior de
      * mostrarla (redimensionar una columna, variantes, personalizacion)
      * se ignora mientras no tenga parametro para el filtro actual.
@@ -536,6 +557,9 @@ sap.ui.define([
         aColumns.forEach(function (oCol) {
             var sColKey = getColumnKey(oCol);
             if (/^c\d+$/i.test(sColKey) && !mMap[sColKey.toLowerCase()]) {
+                aUnmappedKeys.push(sColKey);
+            } else if (sColKey && !isAllowedColumnKey(sColKey)) {
+                // Campo fuera de la lista permitida: no se ofrece en el reporte
                 aUnmappedKeys.push(sColKey);
             }
         });
