@@ -17,10 +17,13 @@ sap.ui.define([
     "sap/m/Table",
     "sap/m/Column",
     "sap/m/ColumnListItem",
-    "sap/ui/model/Sorter"
+    "sap/ui/model/Sorter",
+    "sap/m/Link",
+    "sap/m/Popover",
+    "sap/m/VBox"
 ], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device,
     OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item,
-    ToggleButton, Table, Column, ColumnListItem, Sorter) {
+    ToggleButton, Table, Column, ColumnListItem, Sorter, Link, Popover, VBox) {
     "use strict";
 
     var FIXED_TAX_TYPE = "V";
@@ -666,6 +669,13 @@ sap.ui.define([
             return;
         }
         var aSelect = String(oParams.select).split(",");
+        // Datos del documento para el drilldown de la columna NO. DOCUMENTO
+        // (aunque la columna "Nro. Documento FI" no se muestre)
+        ["CompanyCode", "AccountingDocument", "FiscalYear"].forEach(function (sField) {
+            if (aSelect.indexOf(sField) === -1) {
+                aSelect.push(sField);
+            }
+        });
         oSmartTable.getTable().getColumns().forEach(function (oCol) {
             var sKey = getColumnKey(oCol);
             if (/^c\d+$/i.test(sKey) && aSelect.indexOf(sKey) === -1) {
@@ -805,6 +815,146 @@ sap.ui.define([
         (oInner.getItems() || []).forEach(function (oItem) {
             fnFormat(oItem.getCells());
         });
+    }
+
+    /* ============================================================ */
+    /* Drilldown de NO. DOCUMENTO: link -> popover con 4 destinos   */
+    /* (apps del Launchpad), parametros armados con la fila.        */
+    /* ============================================================ */
+
+    var DRILL_FIELD = "DocumentReferenceID";
+
+    function enc(vValue) {
+        return encodeURIComponent(String(vValue === undefined || vValue === null ? "" : vValue));
+    }
+
+    /** Parametros comunes: Sociedad, Ejercicio y Nro. documento FI de la fila. */
+    function drillParams(oRow) {
+        return "AccountingDocument=" + enc(oRow.AccountingDocument)
+            + "&CompanyCode=" + enc(oRow.CompanyCode)
+            + "&FiscalYear=" + enc(oRow.FiscalYear);
+    }
+
+    // Orden de los links del popover. "hash" devuelve el shellHash (intent) de la fila.
+    var DRILL_TARGETS = [
+        {
+            textKey: "drillAnalyzer",
+            hash: function (oRow) {
+                return "AccountingDocument-analyzeGLLineItem?" + drillParams(oRow);
+            }
+        },
+        {
+            textKey: "drillManage",
+            hash: function (oRow) {
+                return "AccountingDocument-manageV2&/C_ManageJournalEntryTP(CompanyCode='" + enc(oRow.CompanyCode)
+                    + "',FiscalYear='" + enc(oRow.FiscalYear)
+                    + "',AccountingDocument='" + enc(oRow.AccountingDocument) + "')/";
+            }
+        },
+        {
+            textKey: "drillDisplay",
+            hash: function (oRow) {
+                return "AccountingDocument-displayDocument?" + drillParams(oRow);
+            }
+        },
+        {
+            textKey: "drillGLItems",
+            hash: function (oRow) {
+                return "GLAccount-displayGLLineItemReportingView?" + drillParams(oRow);
+            }
+        }
+    ];
+
+    function navigateToHash(sShellHash) {
+        var oBundle = getResourceBundle();
+        var oUshell = window.sap && sap.ushell;
+        if (!oUshell || !oUshell.Container || !oUshell.Container.getServiceAsync) {
+            MessageToast.show(oBundle.getText("drillNoShell"));
+            return;
+        }
+        oUshell.Container.getServiceAsync("CrossApplicationNavigation").then(function (oNavigation) {
+            oNavigation.toExternal({ target: { shellHash: sShellHash } });
+        }).catch(function (oError) {
+            console.warn("[TaxReport] Navegacion fallida", sShellHash, oError);
+            MessageToast.show(oBundle.getText("drillNavError"));
+        });
+    }
+
+    function getDrillPopover() {
+        if (!oState.oDrillPopover) {
+            var oBundle = getResourceBundle();
+            var aLinks = DRILL_TARGETS.map(function (oTarget) {
+                return new Link({
+                    text: oBundle.getText(oTarget.textKey),
+                    press: function () {
+                        var oRow = oState.oDrillRow;
+                        oState.oDrillPopover.close();
+                        if (oRow) {
+                            navigateToHash(oTarget.hash(oRow));
+                        }
+                    }
+                });
+            });
+            oState.oDrillPopover = new Popover({
+                placement: "Auto",
+                contentMinWidth: "16rem",
+                content: [new VBox({ items: aLinks }).addStyleClass("sapUiSmallMargin")]
+            });
+        }
+        return oState.oDrillPopover;
+    }
+
+    function onDocumentLinkPress(oEvent) {
+        var oLink = oEvent.getSource();
+        var oContext = oLink.getBindingContext();
+        var oRow = oContext && oContext.getObject();
+        if (!oRow) {
+            return;
+        }
+        oState.oDrillRow = oRow;
+        var oPopover = getDrillPopover();
+        oPopover.setTitle(String(oRow.DocumentReferenceID || oRow.AccountingDocument || ""));
+        oPopover.openBy(oLink);
+    }
+
+    /**
+     * Cambia la celda de NO. DOCUMENTO (texto) por un link que abre el
+     * popover. Se aplica a la plantilla (filas futuras) y a las filas ya
+     * creadas. Si la celda ya es un link no se toca.
+     */
+    function applyDocumentLinks() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (!oInner) {
+            return;
+        }
+        var fnConvert = function (oOwner) {
+            if (!oOwner || !oOwner.getCells) {
+                return;
+            }
+            oOwner.getCells().slice().forEach(function (oCell, iIndex) {
+                if (oCell.isA && oCell.isA("sap.m.Link")) {
+                    return;
+                }
+                var oInfo = oCell.getBindingInfo && oCell.getBindingInfo("text");
+                var oPart = oInfo && oInfo.parts && oInfo.parts[0];
+                if (!oPart || oPart.path !== DRILL_FIELD) {
+                    return;
+                }
+                oOwner.removeCell(oCell);
+                oCell.destroy();
+                oOwner.insertCell(new Link({
+                    text: "{" + DRILL_FIELD + "}",
+                    wrapping: false,
+                    press: onDocumentLinkPress
+                }), iIndex);
+            });
+        };
+        var oBindingInfo = oInner.getBindingInfo("items");
+        if (oBindingInfo && oBindingInfo.template) {
+            fnConvert(oBindingInfo.template);
+        }
+        (oInner.getItems() || []).forEach(fnConvert);
     }
 
     /** Los filtros de fecha tambien se escriben/muestran como dd.mm.aaaa. */
@@ -979,6 +1129,7 @@ sap.ui.define([
             safeRun(applyColumnWidths, "applyColumnWidths");
             safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
             safeRun(formatDateCells, "formatDateCells");
+            safeRun(applyDocumentLinks, "applyDocumentLinks");
             safeRun(disableColumnResize, "disableColumnResize");
             safeRun(updatePageTotals, "updatePageTotals");
             safeRun(updatePager, "updatePager");
@@ -1830,6 +1981,7 @@ sap.ui.define([
                 hookSmartTable(oSmartTable);
                 safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
                 safeRun(formatDateCells, "formatDateCells");
+                safeRun(applyDocumentLinks, "applyDocumentLinks");
                 if (guardRebind(oSmartTable, mBindingParams)) {
                     return;
                 }
