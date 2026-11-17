@@ -64,7 +64,15 @@ sap.ui.define([
     // Clase CSS de la tabla (ver css/style.css): encabezados en azul
     var TABLE_STYLE_CLASS = "taxReportTable";
 
-    var oState = {
+    /**
+     * Estado de la extension. Este modulo se carga UNA vez y se reutiliza si
+     * la app se vuelve a crear (por ejemplo al volver de un drilldown a otra
+     * app del Launchpad): por eso el estado se reinicia en cada onInit
+     * (resetState), para no conservar la tabla/filtros de la instancia
+     * anterior ya destruida.
+     */
+    function createInitialState() {
+        return {
         oView: null,
         oFilterBar: null,
         oSmartTable: null,
@@ -91,7 +99,23 @@ sap.ui.define([
         oMovedToolbar: null,     // toolbar de la SmartTable mientras esta en el resumen
         iDetailGrowFactor: undefined,
         oAmountFormatter: null
-    };
+        };
+    }
+
+    var oState = createInitialState();
+
+    /** Deja el estado como nuevo (se llama al crearse una instancia de la app). */
+    function resetState() {
+        if (oState.oDrillPopover) {
+            try {
+                oState.oDrillPopover.destroy();
+            } catch (oError) { /* ya destruido */ }
+        }
+        Object.keys(oState).forEach(function (sKey) {
+            delete oState[sKey];
+        });
+        Object.assign(oState, createInitialState());
+    }
 
     /* ============================================================ */
     /* Utilidades generales                                         */
@@ -1054,13 +1078,25 @@ sap.ui.define([
      * volver a verlos hay que pulsar "Go".
      */
     function hideResultsOnFilterChange() {
-        if (!oState.bSearched) {
+        // Sin los filtros obligatorios completos el reporte nunca se muestra
+        if (!oState.bSearched && hasRequiredFilters()) {
             return;
         }
         var oSmartTable = getSmartTable();
         if (oSmartTable && oSmartTable.getVisible()) {
             oSmartTable.setVisible(false);
         }
+    }
+
+    /**
+     * Filtros obligatorios del reporte: Sociedad, Ejercicio y Periodo
+     * contable. Si falta alguno (por ejemplo al volver de un drilldown, donde
+     * el Launchpad solo conserva el periodo) no debe verse el reporte.
+     */
+    function hasRequiredFilters() {
+        return !!(getFilterValue("P_CompanyCode").trim()
+            && getFilterValue("P_FiscalYear").trim()
+            && getFilterValue("FiscalPeriod").trim());
     }
 
     /** La tabla no se muestra hasta que el usuario pulsa "Go". */
@@ -1954,6 +1990,7 @@ sap.ui.define([
              * Sin "return" ni async.
              */
             onInit: function () {
+                resetState();
                 rememberControls(this);
             },
 
@@ -1977,6 +2014,16 @@ sap.ui.define([
                 var oSmartTable = oEvent && oEvent.getSource ? oEvent.getSource() : null;
                 rememberControls(this, null, oSmartTable);
                 var mBindingParams = oEvent && oEvent.getParameter ? oEvent.getParameter("bindingParams") : null;
+                if (!hasRequiredFilters()) {
+                    // Falta Sociedad, Ejercicio o Periodo: no se consulta ni se muestra la tabla
+                    if (mBindingParams) {
+                        mBindingParams.preventTableBind = true;
+                    }
+                    if (oSmartTable && oSmartTable.getVisible()) {
+                        oSmartTable.setVisible(false);
+                    }
+                    return;
+                }
                 showTable();
                 hookSmartTable(oSmartTable);
                 safeRun(hideCurrencyInAmountCells, "hideCurrencyInAmountCells");
