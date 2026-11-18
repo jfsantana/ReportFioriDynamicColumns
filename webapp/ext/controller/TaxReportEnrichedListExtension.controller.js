@@ -20,10 +20,12 @@ sap.ui.define([
     "sap/ui/model/Sorter",
     "sap/m/Link",
     "sap/m/Popover",
-    "sap/m/VBox"
+    "sap/m/VBox",
+    "sap/ui/model/json/JSONModel",
+    "yatl01/reportecolumnasdinamicas/ext/util/RowGrouper"
 ], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device,
     OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item,
-    ToggleButton, Table, Column, ColumnListItem, Sorter, Link, Popover, VBox) {
+    ToggleButton, Table, Column, ColumnListItem, Sorter, Link, Popover, VBox, JSONModel, RowGrouper) {
     "use strict";
 
     var FIXED_TAX_TYPE = "V";
@@ -98,6 +100,18 @@ sap.ui.define([
         mHiddenToolbarIds: {},   // botones de la toolbar ocultos en el resumen
         oMovedToolbar: null,     // toolbar de la SmartTable mientras esta en el resumen
         iDetailGrowFactor: undefined,
+        // Detalle agrupado en el navegador (una fila por factura; ver "Detalle agrupado")
+        bGroupedPending: false,  // la consulta de 1 fila ya se envio: al recibirla se carga todo
+        bGroupedBound: false,    // la tabla esta ligada al modelo JSON agrupado
+        bSkipGroupingOnce: false, // tras un error: una consulta normal del servidor
+        bGroupingFailed: false,  // el ultimo intento de agrupar fallo: no reintentar solo
+        sGroupSignature: "",     // columnas visibles (no importes) con las que se consulto
+        iUiStateTimer: null,
+        iGroupedToken: 0,        // descarta cargas agrupadas antiguas
+        oGrouped: null,          // { rows } filas agrupadas y ordenadas (todas las paginas)
+        oGroupedJson: null,
+        oGroupedTemplate: null,
+        oGroupedRequest: null,   // ruta/filtros/orden de la consulta original (para requestAllRows)
         oAmountFormatter: null
         };
     }
@@ -1159,6 +1173,30 @@ sap.ui.define([
         disableColumnResize();
         safeRun(function () { setupPaging(oSmartTable); }, "setupPaging");
         safeRun(function () { setupSummary(oSmartTable); }, "setupSummary");
+        // Detalle agrupado: recibida la consulta de 1 fila, se cargan y agrupan todas
+        try {
+            oSmartTable.attachDataReceived(function () {
+                if (oState.bGroupedPending) {
+                    oState.bGroupedPending = false;
+                    safeRun(loadGroupedRows, "loadGroupedRows");
+                }
+            });
+        } catch (oError) {
+            console.warn("[TaxReport] SmartTable sin evento dataReceived", oError);
+        }
+        // Quitar/agregar columnas desde Configuracion: ver checkGroupingAfterColumnChange
+        try {
+            oSmartTable.attachUiStateChange(function () {
+                // Se espera un poco: si el SmartTable va a consultar por su cuenta
+                // (columna nueva), no se duplica la consulta.
+                clearTimeout(oState.iUiStateTimer);
+                oState.iUiStateTimer = setTimeout(function () {
+                    safeRun(checkGroupingAfterColumnChange, "checkGroupingAfterColumnChange");
+                }, 400);
+            });
+        } catch (oError) {
+            console.warn("[TaxReport] SmartTable sin evento uiStateChange", oError);
+        }
         var fnReapply = function () {
             safeRun(applyReportTitle, "applyReportTitle");
             safeRun(applyColumnNames, "applyColumnNames");
@@ -1169,6 +1207,7 @@ sap.ui.define([
             safeRun(disableColumnResize, "disableColumnResize");
             safeRun(updatePageTotals, "updatePageTotals");
             safeRun(updatePager, "updatePager");
+            safeRun(refreshGroupedHeaderCount, "refreshGroupedHeaderCount");
         };
         try {
             oSmartTable.attachDataReceived(fnReapply);
@@ -1375,6 +1414,228 @@ sap.ui.define([
         if (!oState.oPager) {
             createPager(oSmartTable);
         }
+    }
+
+    /* ============================================================ */
+    /* Detalle agrupado: una fila por factura                       */
+    /* ============================================================ */
+
+    /*
+     * El servicio devuelve una fila por factura e indicador de impuesto
+     * (TaxCode). Por defecto el detalle debe mostrar UNA fila por factura con
+     * los importes sumados; solo si el usuario agrega una columna que distingue
+     * las lineas (Indicador de impuesto, Nombre del indicador o Pos. impuestos)
+     * se muestran las filas del servidor tal cual (ver RowGrouper).
+     *
+     * Como el servicio no agrupa, el agrupado se hace en el navegador:
+     *  1. El SmartTable ejecuta su consulta normal, pero pidiendo solo 1 fila
+     *     (sirve para obtener la ruta, filtros, orden y $select reales).
+     *  2. Al recibirla (dataReceived) se piden TODAS las filas del filtro, se
+     *     agrupan y se ordenan.
+     *  3. Se reemplaza el binding de la tabla por un modelo JSON con esas filas
+     *     (misma plantilla de celdas) y la pagina actual se muestra con
+     *     startIndex/length. Asi totales de pagina, enlaces de documento y
+     *     paginador siguen funcionando sin cambios.
+     * Al cambiar de pagina solo se vuelve a cortar la lista ya agrupada. Cualquier
+     * otra consulta (Go, orden, columnas, filtros) vuelve a empezar en el paso 1.
+     */
+
+    /** Campos del $select de la consulta del SmartTable. */
+    function getSelectFields(vSelect) {
+        return String(vSelect || "").split(",").map(function (sField) {
+            return sField.trim();
+        }).filter(Boolean);
+    }
+
+    /** Campos de las columnas VISIBLES de la tabla (el $select incluye tambien las claves). */
+    function getVisibleFieldKeys() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        return ((oInner && oInner.getColumns()) || []).filter(function (oCol) {
+            return oCol.getVisible();
+        }).map(getColumnKey);
+    }
+
+    /** Columnas visibles que no son importes, ordenadas: define "por que se agrupa". */
+    function getGroupSignature() {
+        return getVisibleFieldKeys().filter(function (sKey) {
+            return !RowGrouper.isAmountField(sKey);
+        }).map(function (sKey) {
+            return sKey.toLowerCase();
+        }).sort().join(",");
+    }
+
+    /**
+     * Al quitar una columna que ya estaba cargada, el SmartTable solo la oculta
+     * y NO vuelve a consultar. Si por eso cambia el modo (agrupado <-> detalle por
+     * indicador) o el conjunto de columnas por las que se agrupa, se consulta de nuevo.
+     */
+    function checkGroupingAfterColumnChange() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (!oInner || !oState.bSearched || !oSmartTable.getVisible() || !oInner.getBindingInfo("items")
+            || oState.bGroupingFailed || oState.bGroupedPending) {
+            return;
+        }
+        var bGrouped = oState.bGroupedBound;
+        var bWantsGrouping = RowGrouper.needsGrouping(getVisibleFieldKeys());
+        if (bGrouped !== bWantsGrouping || (bGrouped && getGroupSignature() !== oState.sGroupSignature)) {
+            oSmartTable.rebindTable(true);
+        }
+    }
+
+    /** Devuelve la tabla al modelo OData (antes de que el SmartTable vuelva a consultar). */
+    function releaseGroupedBinding() {
+        oState.iGroupedToken += 1;   // descarta cualquier carga agrupada en curso
+        oState.bGroupedPending = false;
+        if (!oState.bGroupedBound) {
+            return;
+        }
+        oState.bGroupedBound = false;
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (oInner) {
+            oInner.unbindItems();
+            oInner.setModel(null);   // vuelve a heredar el modelo OData de la vista
+            oInner.setBusy(false);
+        }
+        if (oState.oGroupedTemplate) {
+            oState.oGroupedTemplate.destroy();
+            oState.oGroupedTemplate = null;
+        }
+    }
+
+    /** SmartTable agrega el contador "(n)" al titulo: se refresca con el total agrupado. */
+    function refreshGroupedHeaderCount() {
+        var oSmartTable = getSmartTable();
+        if (oState.bGroupedBound && oSmartTable && oSmartTable._refreshHeaderText) {
+            oSmartTable._refreshHeaderText();
+        }
+    }
+
+    /** Liga la tabla a la pagina actual de las filas agrupadas. */
+    function bindGroupedPage() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        if (!oInner || !oState.oGrouped || !oState.oGroupedTemplate) {
+            return;
+        }
+        if (!oState.oGroupedJson) {
+            oState.oGroupedJson = new JSONModel();
+            oState.oGroupedJson.setSizeLimit(1000000);
+        }
+        oState.oGroupedJson.setData({ rows: oState.oGrouped.rows });
+        if (!oState.bGroupedBound) {
+            // Primero se suelta el binding OData y despues se cambia el modelo,
+            // para no consultar el servicio con la ruta de otro modelo.
+            oInner.unbindItems();
+            oInner.setModel(oState.oGroupedJson);
+            oState.bGroupedBound = true;
+        }
+        oInner.bindItems({
+            path: "/rows",
+            template: oState.oGroupedTemplate,
+            templateShareable: true,
+            startIndex: oState.iPage * oState.iPageSize,
+            length: oState.iPageSize
+        });
+    }
+
+    /**
+     * Segundo paso: con la consulta de 1 fila ya hecha, pide todas las filas
+     * del filtro, las agrupa y toma el control de la tabla.
+     */
+    function loadGroupedRows() {
+        var oSmartTable = getSmartTable();
+        var oInner = oSmartTable && oSmartTable.getTable && oSmartTable.getTable();
+        var oInfo = oInner && oInner.getBindingInfo("items");
+        if (!oInfo || !oInfo.template) {
+            return;
+        }
+        var aSelect = getSelectFields(oInfo.parameters && oInfo.parameters.select);
+        var oRequest = {
+            path: oInfo.path,
+            filters: oInfo.filters ? [].concat(oInfo.filters) : [],
+            sorter: oInfo.sorter ? [].concat(oInfo.sorter) : [],
+            parameters: { select: aSelect.join(",") }
+        };
+        var oTemplate = oInfo.template.clone();   // conserva las celdas de las columnas actuales
+        // El resaltado de fila de Fiori Elements usa el contexto OData (metadata del
+        // modelo): con el modelo JSON fallaria. No aplica a estas filas.
+        oTemplate.unbindProperty("highlight");
+        var iToken = ++oState.iGroupedToken;
+
+        oInner.setBusy(true);
+        requestAllRows(oSmartTable, aSelect, oRequest).then(function (aRows) {
+            if (iToken !== oState.iGroupedToken) {
+                oTemplate.destroy();
+                return;
+            }
+            var aSorters = oRequest.sorter.map(function (oSorter) {
+                return { path: oSorter.sPath, descending: !!oSorter.bDescending };
+            });
+            // Se agrupa por lo que se ve + la identidad del documento
+            var aGroupBy = getVisibleFieldKeys().concat(["CompanyCode", "AccountingDocument", "FiscalYear"]);
+            var aGrouped = RowGrouper.groupRows(aRows, aSelect, aGroupBy);
+            console.info("[TaxReport] Detalle agrupado: " + aRows.length + " filas del servidor -> "
+                + aGrouped.length + " filas. Agrupado por: " + aGroupBy.join(", "));
+            oState.oGrouped = {
+                rows: RowGrouper.sortRows(aGrouped, aSorters)
+            };
+            oState.oGroupedRequest = oRequest;
+            if (oState.oGroupedTemplate) {
+                oState.oGroupedTemplate.destroy();
+            }
+            oState.oGroupedTemplate = oTemplate;
+            bindGroupedPage();
+            safeRun(refreshGroupedHeaderCount, "refreshGroupedHeaderCount");
+        }).catch(function (oError) {
+            if (iToken !== oState.iGroupedToken) {
+                oTemplate.destroy();
+                return;
+            }
+            // No se pudo agrupar: se muestra el detalle del servidor (una fila por indicador)
+            console.error("[TaxReport] Error al agrupar el detalle por factura:", oError);
+            oTemplate.destroy();
+            MessageToast.show(getResourceBundle().getText("groupedError"));
+            oState.bGroupingFailed = true;
+            oState.bSkipGroupingOnce = true;
+            oSmartTable.rebindTable(true);
+        }).finally(function () {
+            if (iToken === oState.iGroupedToken) {
+                oInner.setBusy(false);
+            }
+        });
+    }
+
+    /**
+     * Se llama al final de onBeforeRebindTableExtension con los parametros ya
+     * calculados. Decide si la consulta es del detalle agrupado.
+     */
+    function prepareGroupedMode(mBindingParams, bPagerNavigation) {
+        if (!mBindingParams) {
+            return;
+        }
+        // Solo cambio de pagina: se vuelve a cortar la lista ya agrupada
+        if (bPagerNavigation && oState.bGroupedBound && oState.oGrouped) {
+            mBindingParams.preventTableBind = true;
+            bindGroupedPage();
+            return;
+        }
+        releaseGroupedBinding();
+        oState.oGrouped = null;
+        oState.sGroupSignature = getGroupSignature();
+        if (oState.bSkipGroupingOnce) {
+            oState.bSkipGroupingOnce = false;
+            return;
+        }
+        if (!RowGrouper.needsGrouping(getVisibleFieldKeys())) {
+            return;   // hay una columna por indicador de impuesto: filas del servidor
+        }
+        oState.bGroupingFailed = false;
+        oState.bGroupedPending = true;
+        mBindingParams.startIndex = 0;
+        mBindingParams.length = 1;
     }
 
     /* ============================================================ */
@@ -1791,9 +2052,12 @@ sap.ui.define([
      * ruta, filtros y orden del binding de la tabla. El $select se arma con
      * los campos del PDF (no con las columnas visibles de la tabla).
      */
-    function requestAllRows(oSmartTable, aSelect) {
+    function requestAllRows(oSmartTable, aSelect, oRequest) {
         var oInner = oSmartTable.getTable();
-        var oInfo = oInner.getBindingInfo("items") || oInner.getBindingInfo("rows");
+        // Con el detalle agrupado la tabla esta ligada al modelo JSON: la ruta,
+        // filtros y orden OData son los de la consulta original.
+        var oInfo = oRequest || (oState.bGroupedBound && oState.oGroupedRequest)
+            || oInner.getBindingInfo("items") || oInner.getBindingInfo("rows");
         var oModel = oSmartTable.getModel();
         if (!oInfo || !oModel) {
             return Promise.reject(new Error("El binding de la tabla no esta disponible"));
@@ -2034,7 +2298,9 @@ sap.ui.define([
                 }
                 ensureSelectForDynamicColumns(mBindingParams);
                 safeRun(function () { applyDefaultSort(mBindingParams); }, "applyDefaultSort");
+                var bPagerNavigation = oState.bPagerNavigation;   // applyPaging lo reinicia
                 safeRun(function () { applyPaging(oSmartTable, mBindingParams); }, "applyPaging");
+                safeRun(function () { prepareGroupedMode(mBindingParams, bPagerNavigation); }, "prepareGroupedMode");
                 refreshForTaxType();
             },
 
