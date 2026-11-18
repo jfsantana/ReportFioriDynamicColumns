@@ -354,8 +354,8 @@ sap.ui.define([
      */
     var ALLOWED_COLUMNS = [
         // Columnas del reporte
-        "documentdate", "tipdocsat", "serie", "documentreferenceid", "nit", "proveedor",
-        "importeiva", "total",
+        "documentdate", "tipdocsat", "serie", "documentreferenceid", "accountingdocument",
+        "nit", "proveedor", "importeiva", "total",
         // Campos opcionales que el usuario puede agregar
         "supplier", "postingdate", "fiscalperiod", "accountingdocumenttype", "fiscalyear",
         "taxitem", "taxcode", "taxcodename", "supplierpoliza",
@@ -707,7 +707,7 @@ sap.ui.define([
             return;
         }
         var aSelect = String(oParams.select).split(",");
-        // Datos del documento para el drilldown de la columna NO. DOCUMENTO
+        // Datos del documento para el drilldown de la columna DOCUMENTO CONTABLE
         // (aunque la columna "Nro. Documento FI" no se muestre)
         ["CompanyCode", "AccountingDocument", "FiscalYear"].forEach(function (sField) {
             if (aSelect.indexOf(sField) === -1) {
@@ -856,11 +856,11 @@ sap.ui.define([
     }
 
     /* ============================================================ */
-    /* Drilldown de NO. DOCUMENTO: link -> popover con 4 destinos   */
+    /* Drilldown de DOCUMENTO CONTABLE: link -> popover con 4 destinos   */
     /* (apps del Launchpad), parametros armados con la fila.        */
     /* ============================================================ */
 
-    var DRILL_FIELD = "DocumentReferenceID";
+    var DRILL_FIELD = "AccountingDocument";   // columna DOCUMENTO CONTABLE
 
     function enc(vValue) {
         return encodeURIComponent(String(vValue === undefined || vValue === null ? "" : vValue));
@@ -951,12 +951,12 @@ sap.ui.define([
         }
         oState.oDrillRow = oRow;
         var oPopover = getDrillPopover();
-        oPopover.setTitle(String(oRow.DocumentReferenceID || oRow.AccountingDocument || ""));
+        oPopover.setTitle(String(oRow.AccountingDocument || oRow.DocumentReferenceID || ""));
         oPopover.openBy(oLink);
     }
 
     /**
-     * Cambia la celda de NO. DOCUMENTO (texto) por un link que abre el
+     * Cambia la celda de DOCUMENTO CONTABLE (texto) por un link que abre el
      * popover. Se aplica a la plantilla (filas futuras) y a las filas ya
      * creadas. Si la celda ya es un link no se toca.
      */
