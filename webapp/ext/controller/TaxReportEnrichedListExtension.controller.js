@@ -1113,6 +1113,53 @@ sap.ui.define([
             && getFilterValue("FiscalPeriod").trim());
     }
 
+    /* ============================================================ */
+    /* Estado que sobrevive al drilldown                            */
+    /* ============================================================ */
+
+    /*
+     * Al volver del drilldown (boton atras del Launchpad) la app se crea de nuevo
+     * y Fiori Elements solo recupera los filtros normales: Sociedad y Ejercicio,
+     * que son parametros del servicio, llegaban vacios. Se guardan en el estado
+     * de la app (getCustomAppStateDataExtension) y al volver se restauran
+     * (restoreCustomAppStateDataExtension); si ya habia una consulta, se repite.
+     * Va fuera de oState porque resetState() borra oState al crearse la app.
+     */
+    var mPendingRestore = null;
+
+    function applyPendingRestore(iRetries) {
+        if (!mPendingRestore) {
+            return;
+        }
+        var oFilterBar = getFilterBar();
+        if (!oFilterBar || !oFilterBar.getFilterData) {
+            if ((iRetries || 0) < 25) {
+                setTimeout(function () {
+                    applyPendingRestore((iRetries || 0) + 1);
+                }, 200);
+            }
+            return;
+        }
+        var mSaved = mPendingRestore;
+        mPendingRestore = null;
+        var mData = {};
+        if (mSaved.company) {
+            mData["$Parameter.P_CompanyCode"] = mSaved.company;
+        }
+        if (mSaved.fiscalYear) {
+            mData["$Parameter.P_FiscalYear"] = mSaved.fiscalYear;
+        }
+        if (mSaved.period && !getFilterValue("FiscalPeriod").trim()) {
+            mData.FiscalPeriod = mSaved.period;
+        }
+        oFilterBar.setFilterData(mData);
+        if (mSaved.searched && hasRequiredFilters()) {
+            setTimeout(function () {
+                oFilterBar.search();
+            }, 300);
+        }
+    }
+
     /** La tabla no se muestra hasta que el usuario pulsa "Go". */
     function hideTableUntilSearch(iRetries) {
         if (oState.bSearched) {
@@ -1146,7 +1193,15 @@ sap.ui.define([
             return;
         }
         oState.bFilterBarHooked = true;
-        oFilterBar.attachSearch(showTable);
+        // La tabla solo se muestra si estan los filtros obligatorios. Fiori Elements
+        // dispara "search" tambien al restaurar el estado (volver de un drilldown) con
+        // Sociedad/Ejercicio vacios: sin esta guardia la tabla aparecia con las
+        // columnas sin nombre ni parametros y el aviso "defina los filtros".
+        oFilterBar.attachSearch(function () {
+            if (hasRequiredFilters()) {
+                showTable();
+            }
+        });
         // Oculta de inmediato los campos C01..C99 (aun sin mapeo cargado) y
         // reaplica al terminar la inicializacion / al cargar una variante.
         applyFilterItems();
@@ -2267,6 +2322,38 @@ sap.ui.define([
                 hideTableUntilSearch();
                 // Deja listos los nombres de los filtros desde la carga inicial
                 refreshForTaxType();
+            },
+
+            /**
+             * Hook de Fiori Elements V2: guarda en el estado de la app los
+             * parametros que FE no restaura al volver de un drilldown.
+             */
+            getCustomAppStateDataExtension: function (oCustomData) {
+                if (!oCustomData) {
+                    return;
+                }
+                var mCurrent = {
+                    company: getFilterValue("P_CompanyCode").trim(),
+                    fiscalYear: getFilterValue("P_FiscalYear").trim(),
+                    period: getFilterValue("FiscalPeriod").trim(),
+                    searched: !!oState.bSearched && hasRequiredFilters()
+                };
+                // Si aun no se restauro (filtros vacios), se conserva lo pendiente
+                if (!mCurrent.company && !mCurrent.fiscalYear && mPendingRestore) {
+                    mCurrent = mPendingRestore;
+                }
+                oCustomData.taxReport = mCurrent;
+            },
+
+            /** Hook de Fiori Elements V2: restaura lo guardado arriba. */
+            restoreCustomAppStateDataExtension: function (oCustomData) {
+                if (oCustomData && oCustomData.taxReport) {
+                    mPendingRestore = oCustomData.taxReport;
+                    // Se espera un poco: FE aplica su propio estado de filtros primero
+                    setTimeout(function () {
+                        applyPendingRestore(0);
+                    }, 600);
+                }
             },
 
             /**
