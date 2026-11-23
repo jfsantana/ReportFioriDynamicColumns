@@ -90,7 +90,7 @@
                 <Annotation Term="UI.LineItem">
                     <Collection>
                         <!-- Orden del Libro de Compras (el "#" correlativo solo existe en el PDF).
-                             NO. DOCUMENTO va al final y no se puede ocultar (el
+                             NO. DOCUMENTO va despues de SERIE y no se puede ocultar (el
                              controller bloquea su visibilidad: lockColumnVisible). -->
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="DocumentDate"/>
@@ -110,11 +110,11 @@
                                 </Record>
                             </Annotation>
                         </Record>
-                        <!-- DOCUMENTO CONTABLE (AccountingDocument): 4.a columna, despues de
-                             SERIE. Lleva el drilldown (link con las 4 apps destino). -->
+                        <!-- NO. DOCUMENTO (DocumentReferenceID): 4.a columna, despues de
+                             SERIE. Texto simple. -->
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="AccountingDocument"/>
-                            <PropertyValue Property="Label" String="DOCUMENTO CONTABLE"/>
+                            <PropertyValue Property="Value" Path="DocumentReferenceID"/>
+                            <PropertyValue Property="Label" String="NO. DOCUMENTO"/>
                         </Record>
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="Nit"/>
@@ -199,10 +199,11 @@
                             <PropertyValue Property="Value" Path="Total"/>
                             <PropertyValue Property="Label" String="TOTAL"/>
                         </Record>
-                        <!-- NO. DOCUMENTO (DocumentReferenceID): ultima columna, texto simple. -->
+                        <!-- DOCUMENTO CONTABLE (AccountingDocument): ultima columna. Lleva el
+                             drilldown (link con las 4 apps destino). -->
                         <Record Type="UI.DataField">
-                            <PropertyValue Property="Value" Path="DocumentReferenceID"/>
-                            <PropertyValue Property="Label" String="NO. DOCUMENTO"/>
+                            <PropertyValue Property="Value" Path="AccountingDocument"/>
+                            <PropertyValue Property="Label" String="DOCUMENTO CONTABLE"/>
                         </Record>
                         <!-- "No. PROVEEDOR" (NoProveedor) ya NO forma parte del reporte
                              inicial. El usuario puede agregarlo desde el engranaje
