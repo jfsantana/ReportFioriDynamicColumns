@@ -433,6 +433,27 @@ sap.ui.define([
     }
 
     /**
+     * Nombres de TODOS los campos de la entidad (desde el metadata). El SmartTable
+     * crea las columnas de los campos opcionales solo cuando se abre por primera vez
+     * Configuracion > Columnas: hasta ese momento esas columnas no existen y no se
+     * pueden descubrir mirando la tabla, asi que la lista de campos a desactivar se
+     * arma con el metadata. Devuelve [] si el metadata aun no esta disponible.
+     */
+    function getEntityFieldNames(oSmartTable) {
+        try {
+            var oMeta = oSmartTable.getModel().getMetaModel();
+            var oEntitySet = oMeta && oMeta.getODataEntitySet(oSmartTable.getEntitySet());
+            var oEntityType = oEntitySet && oMeta.getODataEntityType(oEntitySet.entityType);
+            return ((oEntityType && oEntityType.property) || []).map(function (oProperty) {
+                return oProperty.name;
+            });
+        } catch (oError) {
+            console.warn("[TaxReport] No se pudo leer el metadata de la entidad", oError);
+            return [];
+        }
+    }
+
+    /**
      * Excluye las columnas indicadas de la tabla y de la personalizacion
      * (SmartTable.deactivateColumns, API publica desde UI5 1.54). Solo se
      * invoca si la lista cambio, porque esta funcion se ejecuta en cada
@@ -602,6 +623,14 @@ sap.ui.define([
             } else if (sColKey && !isAllowedColumnKey(sColKey)) {
                 // Campo fuera de la lista permitida: no se ofrece en el reporte
                 aUnmappedKeys.push(sColKey);
+            }
+        });
+        // Tambien los campos de la entidad cuya columna aun no existe (ver getEntityFieldNames)
+        getEntityFieldNames(oSmartTable).forEach(function (sField) {
+            var bUnmappedC = /^c\d+$/i.test(sField) && !mMap[sField.toLowerCase()];
+            var bNotAllowed = !/^c\d+$/i.test(sField) && !isAllowedColumnKey(sField);
+            if ((bUnmappedC || bNotAllowed) && aUnmappedKeys.indexOf(sField) === -1) {
+                aUnmappedKeys.push(sField);
             }
         });
         syncDeactivatedColumns(oSmartTable, aUnmappedKeys);
