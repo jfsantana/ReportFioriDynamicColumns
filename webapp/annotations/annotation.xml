@@ -74,9 +74,9 @@
                 <Annotation Term="UI.HeaderInfo">
                     <Record Type="UI.HeaderInfoType">
                         <PropertyValue Property="TypeName"
-                                       String="Libro de Compras"/>
+                                       String="Libro de Compras Guatemala"/>
                         <PropertyValue Property="TypeNamePlural"
-                                       String="Libro de Compras"/>
+                                       String="Libro de Compras Guatemala"/>
                         <PropertyValue Property="Title">
                             <Record Type="UI.DataField">
                                 <PropertyValue Property="Value"
