@@ -130,6 +130,95 @@
           "uri": "css/style.css"
         }
       ]
+    },
+    "config": {
+      "libroFiscal": {
+        "_descripcion": "Configuracion del libro fiscal (Compras GT). Es lo UNICO que cambia en el codigo al replicar el libro para otro pais/cliente/tipo. Ver docs/replicar-libro.md",
+        "tipoImpuesto": "V",
+        "parametros": {
+          "entitySet": "TablaParametros",
+          "campoSociedad": "Sociedad",
+          "campoTipoImpuesto": "TaxType",
+          "campoColumna": "FieldName",
+          "campoDescripcion": "DescripcionGrup"
+        },
+        "filtros": {
+          "sociedad": "P_CompanyCode",
+          "ejercicio": "P_FiscalYear",
+          "periodo": "FiscalPeriod"
+        },
+        "campos": {
+          "sociedad": "CompanyCode",
+          "documento": "AccountingDocument",
+          "ejercicio": "FiscalYear",
+          "tipoDocumento": "TipDocSat",
+          "descripcionTipoDocumento": "DescTipoDocumento",
+          "indicadorImpuesto": "TaxCode",
+          "nombreIndicadorImpuesto": "TaxCodeName",
+          "posicionImpuesto": "TaxItem",
+          "iva": "ImporteIVA",
+          "total": "Total",
+          "moneda": "CompanyCodeCurrency"
+        },
+        "camposFecha": ["DocumentDate", "PostingDate"],
+        "columnaFija": "DocumentReferenceID",
+        "columnasPermitidas": [
+          "DocumentDate", "TipDocSat", "Serie", "DocumentReferenceID", "AccountingDocument",
+          "Nit", "Proveedor", "ImporteIVA", "Total",
+          "Supplier", "PostingDate", "FiscalPeriod", "AccountingDocumentType", "FiscalYear",
+          "TaxItem", "TaxCode", "TaxCodeName", "SupplierPoliza",
+          "DescTipoDocumento", "CompanyCode", "TrataEspecialPoliza"
+        ],
+        "anchoColumnas": {
+          "Nit": "9rem",
+          "Serie": "10.5rem",
+          "TipDocSat": "5rem"
+        },
+        "anchoColumnasScroll": {
+          "DocumentDate": "7rem",
+          "DocumentReferenceID": "9rem",
+          "Proveedor": "18rem",
+          "ImporteIVA": "8rem",
+          "Total": "9rem",
+          "NoProveedor": "8.5rem",
+          "AccountingDocument": "9rem"
+        },
+        "anchoColumnaScrollPorDefecto": "9rem",
+        "ordenInicial": ["DocumentDate", "AccountingDocument"],
+        "drilldown": {
+          "campo": "AccountingDocument",
+          "destinos": [
+            {
+              "texto": "drillAnalyzer",
+              "hash": "AccountingDocument-analyzeGLLineItem?AccountingDocument={AccountingDocument}&CompanyCode={CompanyCode}&FiscalYear={FiscalYear}"
+            },
+            {
+              "texto": "drillManage",
+              "hash": "AccountingDocument-manageV2&/C_ManageJournalEntryTP(CompanyCode='{CompanyCode}',FiscalYear='{FiscalYear}',AccountingDocument='{AccountingDocument}')/"
+            },
+            {
+              "texto": "drillDisplay",
+              "hash": "AccountingDocument-displayDocument?AccountingDocument={AccountingDocument}&CompanyCode={CompanyCode}&FiscalYear={FiscalYear}"
+            },
+            {
+              "texto": "drillGLItems",
+              "hash": "GLAccount-displayGLLineItemReportingView?AccountingDocument={AccountingDocument}&CompanyCode={CompanyCode}&FiscalYear={FiscalYear}"
+            }
+          ]
+        },
+        "pdf": {
+          "servicio": "/sap/opu/odata/sap/YMQA13FISB002/",
+          "accion": "generarPdf",
+          "entitySet": "PdfStream",
+          "propiedadMedia": "PdfData",
+          "nombreArchivoPorDefecto": "libro de compras.pdf",
+          "parametros": {
+            "CompanyCode": "sociedad",
+            "FiscalYear": "ejercicio",
+            "FiscalPeriod": "periodo"
+          }
+        }
+      }
     }
   },
   "sap.ui.generic.app": {

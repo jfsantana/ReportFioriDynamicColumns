@@ -22,43 +22,75 @@ sap.ui.define([
     "sap/m/Popover",
     "sap/m/VBox",
     "sap/ui/model/json/JSONModel",
-    "yatl01/reportecolumnasdinamicas/ext/util/RowGrouper"
+    "../util/RowGrouper"
 ], function (NumberFormat, BusyIndicator, Filter, FilterOperator, MessageToast, MessageBox, Device,
     OverflowToolbar, ToolbarSpacer, Button, Text, Select, StepInput, Item,
     ToggleButton, Table, Column, ColumnListItem, Sorter, Link, Popover, VBox, JSONModel, RowGrouper) {
     "use strict";
 
-    var FIXED_TAX_TYPE = "V";
+    /* ============================================================ */
+    /* Configuracion del libro                                      */
+    /* ============================================================ */
 
-    // Campos de fecha del reporte y su formato visual (dd.mm.aaaa)
-    var DATE_FIELDS = ["DocumentDate", "PostingDate"];
+    /*
+     * Todo lo especifico del libro (tipo de impuesto, nombres de campos,
+     * anchos, drilldown, servicio del PDF...) vive en manifest.json ->
+     * sap.ui5/config/libroFiscal. Este codigo es comun a todos los libros:
+     * para replicar el libro (Ventas, otro pais) NO se toca este archivo.
+     * Ver docs/replicar-libro.md.
+     */
+    var CONFIG_PATH = "/sap.ui5/config/libroFiscal";
+    var CFG = null;
+
+    // Formato visual de las fechas (dd.mm.aaaa)
     var DATE_PATTERN = "dd.MM.yyyy";
 
-    // Anchos fijos (solo visualizacion en el navegador). Unidades "rem" simples:
-    // NIT ~12 caracteres y Serie ~15 caracteres, mas el relleno de la celda.
-    // TIPO muestra solo el codigo SAT (FEL, FACT, ...: ~4 caracteres).
-    var COLUMN_WIDTHS = {
-        nit: "9rem",
-        serie: "10.5rem",
-        tipdocsat: "5rem"
-    };
+    function lower(vValue) {
+        return String(vValue || "").toLowerCase();
+    }
 
-    // Anchos para el modo "tabla completa con scroll horizontal" (escritorio y
-    // tableta). Cada columna lleva un ancho propio para que, si la suma supera
-    // el ancho de la pantalla, aparezca la barra de desplazamiento horizontal
-    // en lugar de que las columnas pasen al area emergente (popin).
-    var SCROLL_COLUMN_WIDTHS = {
-        documentdate: "7rem",
-        documentreferenceid: "9rem",
-        proveedor: "18rem",
-        importeiva: "8rem",
-        total: "9rem",
-        noproveedor: "8.5rem",
-        accountingdocument: "9rem"
-    };
-    // C01..C15 y campos agregados por el usuario. Mas angosto porque los
-    // encabezados largos se muestran en varias lineas (ver applyColumnWidths).
-    var SCROLL_DEFAULT_WIDTH = "9rem";
+    /** Mapa { Campo: valor } -> { campo: valor } (claves en minusculas). */
+    function lowerKeys(mMap) {
+        var mResult = {};
+        Object.keys(mMap || {}).forEach(function (sKey) {
+            mResult[sKey.toLowerCase()] = mMap[sKey];
+        });
+        return mResult;
+    }
+
+    /** Campos que identifican un documento: sociedad, documento y ejercicio. */
+    function getDocumentKeyFields() {
+        return [CFG.campos.sociedad, CFG.campos.documento, CFG.campos.ejercicio];
+    }
+
+    /**
+     * Lee la configuracion del manifest de la app. En Fiori Elements V2 el
+     * controlador pertenece al componente de la plantilla (ListReport); el
+     * manifest con la configuracion es el del componente de la app.
+     */
+    function loadConfig(oController) {
+        var oComponent = null;
+        try {
+            oComponent = oController && oController.getOwnerComponent && oController.getOwnerComponent();
+            if (oComponent && oComponent.getAppComponent) {
+                oComponent = oComponent.getAppComponent() || oComponent;
+            }
+        } catch (oError) {
+            console.warn("[TaxReport] No se pudo obtener el componente de la app", oError);
+        }
+        var oConfig = oComponent && oComponent.getManifestEntry && oComponent.getManifestEntry(CONFIG_PATH);
+        if (!oConfig) {
+            console.error("[TaxReport] Falta la configuracion del libro en manifest.json (" + CONFIG_PATH + ")");
+            MessageBox.error("Falta la configuración del libro en manifest.json (" + CONFIG_PATH + ").");
+            return;
+        }
+        CFG = oConfig;
+        RowGrouper.configure({
+            amountFields: [CFG.campos.iva, CFG.campos.total],
+            lineLevelFields: [CFG.campos.indicadorImpuesto, CFG.campos.nombreIndicadorImpuesto,
+                CFG.campos.posicionImpuesto]
+        });
+    }
 
     // Paginacion: filas por pagina disponibles (la primera es la predeterminada)
     var PAGE_SIZES = [20, 50, 100];
@@ -234,9 +266,9 @@ sap.ui.define([
         }
     }
 
-    /** El reporte trabaja SIEMPRE con Input Tax (V): no hay filtro de Tipo de Impuesto. */
+    /** El libro trabaja con un tipo de impuesto fijo (config: tipoImpuesto): no hay filtro. */
     function getTaxTypeValue() {
-        return FIXED_TAX_TYPE;
+        return CFG.tipoImpuesto;
     }
 
     function getAmountFormatter() {
@@ -268,15 +300,16 @@ sap.ui.define([
         if (!oModel) {
             return Promise.reject(new Error("Modelo OData no disponible"));
         }
+        var oParams = CFG.parametros;
         var aFilters = [];
         if (sTaxType) {
-            aFilters.push(new Filter("TaxType", FilterOperator.EQ, sTaxType));
+            aFilters.push(new Filter(oParams.campoTipoImpuesto, FilterOperator.EQ, sTaxType));
         }
         if (sCompany) {
-            aFilters.push(new Filter("Sociedad", FilterOperator.EQ, sCompany));
+            aFilters.push(new Filter(oParams.campoSociedad, FilterOperator.EQ, sCompany));
         }
         oState.mParametrosCache[sKey] = new Promise(function (fnResolve, fnReject) {
-            oModel.read("/TablaParametros", {
+            oModel.read("/" + oParams.entitySet, {
                 filters: aFilters,
                 success: function (oData) {
                     var aRows = (oData && oData.results) || [];
@@ -298,18 +331,19 @@ sap.ui.define([
      * Impuesto indicado (no se pueden mezclar V y A). 
      */
     function buildParametrosMap(aRows, sTaxType, sCompany) {
+        var oParams = CFG.parametros;
         var mMap = {};
         (aRows || []).forEach(function (oRow) {
-            var sRowTax = String(oRow.TaxType || "").trim().toUpperCase();
+            var sRowTax = String(oRow[oParams.campoTipoImpuesto] || "").trim().toUpperCase();
             if (sTaxType && sRowTax !== sTaxType) {
                 return;
             }
-            var sRowCompany = String(oRow.Sociedad || "").trim().toUpperCase();
+            var sRowCompany = String(oRow[oParams.campoSociedad] || "").trim().toUpperCase();
             if (sCompany && sRowCompany !== sCompany) {
                 return;
             }
-            var sField = String(oRow.FieldName || "").trim().toLowerCase();
-            var sDesc = String(oRow.DescripcionGrup || "").trim();
+            var sField = String(oRow[oParams.campoColumna] || "").trim().toLowerCase();
+            var sDesc = String(oRow[oParams.campoDescripcion] || "").trim();
             if (sField && sDesc && !mMap[sField]) {
                 mMap[sField] = sDesc;
             }
@@ -317,15 +351,9 @@ sap.ui.define([
         return mMap;
     }
 
+    /** Titulo del reporte (i18n: reportTitle). */
     function getReportTitle() {
-        var oBundle = getResourceBundle();
-        if (oState.sTaxType === "V") {
-            return oBundle.getText("titleInputTax");
-        }
-        if (oState.sTaxType === "A") {
-            return oBundle.getText("titleOutputTax");
-        }
-        return oBundle.getText("titleDefault");
+        return getResourceBundle().getText("reportTitle");
     }
 
     /** Clave de columna (C01, C02, ...) de una sap.m.Column de la SmartTable. */
@@ -350,21 +378,11 @@ sap.ui.define([
      * Campos que pueden verse en la tabla o agregarse desde Configuracion >
      * Columnas (minusculas). Cualquier otra columna de la entidad se desactiva
      * (no aparece en la tabla ni en el dialogo). Las C01..C15 se rigen por
-     * TablaParametros y se tratan aparte.
+     * TablaParametros y se tratan aparte. Lista: config columnasPermitidas.
      */
-    var ALLOWED_COLUMNS = [
-        // Columnas del reporte
-        "documentdate", "tipdocsat", "serie", "documentreferenceid", "accountingdocument",
-        "nit", "proveedor", "importeiva", "total",
-        // Campos opcionales que el usuario puede agregar
-        "supplier", "postingdate", "fiscalperiod", "accountingdocumenttype", "fiscalyear",
-        "taxitem", "taxcode", "taxcodename", "supplierpoliza",
-        "desctipodocumento", "companycode", "trataespecialpoliza"
-    ];
-
     function isAllowedColumnKey(sKey) {
         var sLower = String(sKey).toLowerCase();
-        return /^c\d+$/.test(sLower) || ALLOWED_COLUMNS.indexOf(sLower) !== -1;
+        return /^c\d+$/.test(sLower) || (CFG.columnasPermitidas || []).map(lower).indexOf(sLower) !== -1;
     }
 
     /**
@@ -513,10 +531,14 @@ sap.ui.define([
                 oDetailsButton.setVisible(false);
             }
         }
+        // Anchos fijos (config anchoColumnas) y, en escritorio/tableta, anchos
+        // para el scroll horizontal (config anchoColumnasScroll / ...PorDefecto)
+        var mWidths = lowerKeys(CFG.anchoColumnas);
+        var mScrollWidths = lowerKeys(CFG.anchoColumnasScroll);
         aColumns.forEach(function (oCol) {
             var sKey = getColumnKey(oCol).toLowerCase();
-            var sWidth = COLUMN_WIDTHS[sKey]
-                || (bScroll ? (SCROLL_COLUMN_WIDTHS[sKey] || SCROLL_DEFAULT_WIDTH) : "");
+            var sWidth = mWidths[sKey]
+                || (bScroll ? (mScrollWidths[sKey] || CFG.anchoColumnaScrollPorDefecto) : "");
             if (sWidth && oCol.getWidth() !== sWidth) {
                 oCol.setWidth(sWidth);
             }
@@ -533,12 +555,10 @@ sap.ui.define([
         });
     }
 
-    /** Campos numericos fijos con total de pagina (ademas de C01..C99). */
-    var TOTAL_FIELDS = ["importeiva", "total"];
-
+    /** Columnas numericas con total de pagina: C01..C99, IVA y TOTAL (config campos). */
     function isNumericColumnKey(sKey) {
         var sLower = String(sKey || "").toLowerCase();
-        return /^c\d+$/.test(sLower) || TOTAL_FIELDS.indexOf(sLower) !== -1;
+        return /^c\d+$/.test(sLower) || [lower(CFG.campos.iva), lower(CFG.campos.total)].indexOf(sLower) !== -1;
     }
 
     /** Pone (o actualiza) el texto del pie de una columna; sin texto lo quita. */
@@ -639,8 +659,8 @@ sap.ui.define([
             var sKey = getColumnKey(oCol).toLowerCase();
             var sDesc = mMap[sKey];
 
-            // NO. DOCUMENTO: columna obligatoria, no se puede ocultar
-            if (sKey === "documentreferenceid") {
+            // Columna obligatoria (config columnaFija, p. ej. NO. DOCUMENTO): no se puede ocultar
+            if (sKey === lower(CFG.columnaFija)) {
                 lockColumnVisible(oCol);
             }
 
@@ -712,7 +732,7 @@ sap.ui.define([
      */
     function refreshForTaxType() {
         oState.sTaxType = getTaxTypeValue().trim().toUpperCase();
-        oState.sCompany = getFilterValue("P_CompanyCode").trim().toUpperCase();
+        oState.sCompany = getFilterValue(CFG.filtros.sociedad).trim().toUpperCase();
         applyReportTitle();
         return loadParametros(oState.sCompany, oState.sTaxType).then(function (aRows) {
             oState.mParametrosMap = buildParametrosMap(aRows, oState.sTaxType, oState.sCompany);
@@ -738,7 +758,7 @@ sap.ui.define([
         var aSelect = String(oParams.select).split(",");
         // Datos del documento para el drilldown de la columna DOCUMENTO CONTABLE
         // (aunque la columna "Nro. Documento FI" no se muestre)
-        ["CompanyCode", "AccountingDocument", "FiscalYear"].forEach(function (sField) {
+        getDocumentKeyFields().forEach(function (sField) {
             if (aSelect.indexOf(sField) === -1) {
                 aSelect.push(sField);
             }
@@ -777,7 +797,7 @@ sap.ui.define([
             var sName = oItem.getName();
             if (/^c\d+$/i.test(sName)) {
                 oState.mFilterItems[sName.toLowerCase()] = oItem;
-            } else if (sName === "P_CompanyCode" || sName === "P_FiscalYear") {
+            } else if (sName === CFG.filtros.sociedad || sName === CFG.filtros.ejercicio) {
                 oItem.setVisible(false);
             }
         });
@@ -828,7 +848,7 @@ sap.ui.define([
                 var oUnit = aItems[1];
                 var oInfo = oUnit.getBindingInfo && oUnit.getBindingInfo("text");
                 var bIsCurrency = oInfo && oInfo.parts && oInfo.parts.some(function (oPart) {
-                    return oPart.path === "CompanyCodeCurrency";
+                    return oPart.path === CFG.campos.moneda;
                 });
                 if (bIsCurrency && oUnit.getVisible()) {
                     oUnit.setVisible(false);
@@ -870,7 +890,7 @@ sap.ui.define([
             (aCells || []).forEach(function (oCell) {
                 var oInfo = oCell.getBindingInfo && oCell.getBindingInfo("text");
                 var oPart = oInfo && oInfo.parts && oInfo.parts[0];
-                if (oPart && DATE_FIELDS.indexOf(oPart.path) > -1 && oInfo.formatter !== formatDateDDMMYYYY) {
+                if (oPart && CFG.camposFecha.indexOf(oPart.path) > -1 && oInfo.formatter !== formatDateDDMMYYYY) {
                     oCell.bindText({ path: oPart.path, formatter: formatDateDDMMYYYY });
                 }
             });
@@ -889,48 +909,25 @@ sap.ui.define([
     /* (apps del Launchpad), parametros armados con la fila.        */
     /* ============================================================ */
 
-    var DRILL_FIELD = "AccountingDocument";   // columna DOCUMENTO CONTABLE
+    /** Columna con el link del drilldown (config drilldown.campo, p. ej. DOCUMENTO CONTABLE). */
+    function getDrillField() {
+        return CFG.drilldown.campo;
+    }
 
     function enc(vValue) {
         return encodeURIComponent(String(vValue === undefined || vValue === null ? "" : vValue));
     }
 
-    /** Parametros comunes: Sociedad, Ejercicio y Nro. documento FI de la fila. */
-    function drillParams(oRow) {
-        return "AccountingDocument=" + enc(oRow.AccountingDocument)
-            + "&CompanyCode=" + enc(oRow.CompanyCode)
-            + "&FiscalYear=" + enc(oRow.FiscalYear);
+    /**
+     * shellHash (intent) de un destino para la fila: en la plantilla del
+     * config (drilldown.destinos[].hash) cada {Campo} se reemplaza por el
+     * valor de la fila, codificado para URL.
+     */
+    function buildDrillHash(sTemplate, oRow) {
+        return String(sTemplate).replace(/\{(\w+)\}/g, function (sMatch, sField) {
+            return enc(oRow[sField]);
+        });
     }
-
-    // Orden de los links del popover. "hash" devuelve el shellHash (intent) de la fila.
-    var DRILL_TARGETS = [
-        {
-            textKey: "drillAnalyzer",
-            hash: function (oRow) {
-                return "AccountingDocument-analyzeGLLineItem?" + drillParams(oRow);
-            }
-        },
-        {
-            textKey: "drillManage",
-            hash: function (oRow) {
-                return "AccountingDocument-manageV2&/C_ManageJournalEntryTP(CompanyCode='" + enc(oRow.CompanyCode)
-                    + "',FiscalYear='" + enc(oRow.FiscalYear)
-                    + "',AccountingDocument='" + enc(oRow.AccountingDocument) + "')/";
-            }
-        },
-        {
-            textKey: "drillDisplay",
-            hash: function (oRow) {
-                return "AccountingDocument-displayDocument?" + drillParams(oRow);
-            }
-        },
-        {
-            textKey: "drillGLItems",
-            hash: function (oRow) {
-                return "GLAccount-displayGLLineItemReportingView?" + drillParams(oRow);
-            }
-        }
-    ];
 
     function navigateToHash(sShellHash) {
         var oBundle = getResourceBundle();
@@ -950,14 +947,15 @@ sap.ui.define([
     function getDrillPopover() {
         if (!oState.oDrillPopover) {
             var oBundle = getResourceBundle();
-            var aLinks = DRILL_TARGETS.map(function (oTarget) {
+            // Orden de los links del popover = orden de config drilldown.destinos
+            var aLinks = CFG.drilldown.destinos.map(function (oTarget) {
                 return new Link({
-                    text: oBundle.getText(oTarget.textKey),
+                    text: oBundle.getText(oTarget.texto),
                     press: function () {
                         var oRow = oState.oDrillRow;
                         oState.oDrillPopover.close();
                         if (oRow) {
-                            navigateToHash(oTarget.hash(oRow));
+                            navigateToHash(buildDrillHash(oTarget.hash, oRow));
                         }
                     }
                 });
@@ -980,7 +978,7 @@ sap.ui.define([
         }
         oState.oDrillRow = oRow;
         var oPopover = getDrillPopover();
-        oPopover.setTitle(String(oRow.AccountingDocument || oRow.DocumentReferenceID || ""));
+        oPopover.setTitle(String(oRow[getDrillField()] || oRow[CFG.columnaFija] || ""));
         oPopover.openBy(oLink);
     }
 
@@ -995,6 +993,7 @@ sap.ui.define([
         if (!oInner) {
             return;
         }
+        var sDrillField = getDrillField();
         var fnConvert = function (oOwner) {
             if (!oOwner || !oOwner.getCells) {
                 return;
@@ -1005,13 +1004,13 @@ sap.ui.define([
                 }
                 var oInfo = oCell.getBindingInfo && oCell.getBindingInfo("text");
                 var oPart = oInfo && oInfo.parts && oInfo.parts[0];
-                if (!oPart || oPart.path !== DRILL_FIELD) {
+                if (!oPart || oPart.path !== sDrillField) {
                     return;
                 }
                 oOwner.removeCell(oCell);
                 oCell.destroy();
                 oOwner.insertCell(new Link({
-                    text: "{" + DRILL_FIELD + "}",
+                    text: "{" + sDrillField + "}",
                     wrapping: false,
                     press: onDocumentLinkPress
                 }), iIndex);
@@ -1026,7 +1025,7 @@ sap.ui.define([
 
     /** Los filtros de fecha tambien se escriben/muestran como dd.mm.aaaa. */
     function applyFilterDateFormat(oFilterBar) {
-        DATE_FIELDS.forEach(function (sName) {
+        CFG.camposFecha.forEach(function (sName) {
             try {
                 var oControl = oFilterBar.determineControlByName && oFilterBar.determineControlByName(sName);
                 if (oControl && oControl.setDisplayFormat && oControl.getDisplayFormat() !== DATE_PATTERN) {
@@ -1087,7 +1086,7 @@ sap.ui.define([
      */
     function guardRebind(oSmartTable, mBindingParams) {
         oState.sTaxType = getTaxTypeValue().trim().toUpperCase();
-        oState.sCompany = getFilterValue("P_CompanyCode").trim().toUpperCase();
+        oState.sCompany = getFilterValue(CFG.filtros.sociedad).trim().toUpperCase();
         var sKey = getParametrosKey(oState.sCompany, oState.sTaxType);
         var aRows = oState.mParametrosResolved[sKey];
 
@@ -1137,9 +1136,9 @@ sap.ui.define([
      * el Launchpad solo conserva el periodo) no debe verse el reporte.
      */
     function hasRequiredFilters() {
-        return !!(getFilterValue("P_CompanyCode").trim()
-            && getFilterValue("P_FiscalYear").trim()
-            && getFilterValue("FiscalPeriod").trim());
+        return !!(getFilterValue(CFG.filtros.sociedad).trim()
+            && getFilterValue(CFG.filtros.ejercicio).trim()
+            && getFilterValue(CFG.filtros.periodo).trim());
     }
 
     /* ============================================================ */
@@ -1173,13 +1172,13 @@ sap.ui.define([
         mPendingRestore = null;
         var mData = {};
         if (mSaved.company) {
-            mData["$Parameter.P_CompanyCode"] = mSaved.company;
+            mData["$Parameter." + CFG.filtros.sociedad] = mSaved.company;
         }
         if (mSaved.fiscalYear) {
-            mData["$Parameter.P_FiscalYear"] = mSaved.fiscalYear;
+            mData["$Parameter." + CFG.filtros.ejercicio] = mSaved.fiscalYear;
         }
-        if (mSaved.period && !getFilterValue("FiscalPeriod").trim()) {
-            mData.FiscalPeriod = mSaved.period;
+        if (mSaved.period && !getFilterValue(CFG.filtros.periodo).trim()) {
+            mData[CFG.filtros.periodo] = mSaved.period;
         }
         oFilterBar.setFilterData(mData);
         if (mSaved.searched && hasRequiredFilters()) {
@@ -1339,10 +1338,9 @@ sap.ui.define([
         if (!mBindingParams || (mBindingParams.sorter && mBindingParams.sorter.length)) {
             return;
         }
-        mBindingParams.sorter = [
-            new Sorter("DocumentDate", false),
-            new Sorter("AccountingDocument", false)
-        ];
+        mBindingParams.sorter = (CFG.ordenInicial || []).map(function (sField) {
+            return new Sorter(sField, false);
+        });
     }
 
     /**
@@ -1659,7 +1657,7 @@ sap.ui.define([
                 return { path: oSorter.sPath, descending: !!oSorter.bDescending };
             });
             // Se agrupa por lo que se ve + la identidad del documento
-            var aGroupBy = getVisibleFieldKeys().concat(["CompanyCode", "AccountingDocument", "FiscalYear"]);
+            var aGroupBy = getVisibleFieldKeys().concat(getDocumentKeyFields());
             var aGrouped = RowGrouper.groupRows(aRows, aSelect, aGroupBy);
             console.info("[TaxReport] Detalle agrupado: " + aRows.length + " filas del servidor -> "
                 + aGrouped.length + " filas. Agrupado por: " + aGroupBy.join(", "));
@@ -1744,7 +1742,7 @@ sap.ui.define([
 
     /**
      * Layouts totalizados disponibles. Cada uno define:
-     *  - select: campos OData que se agrupan
+     *  - select(): campos OData que se agrupan (config campos)
      *  - labelColumns: columnas de texto del resumen (encabezado i18n y ancho)
      *  - group(oRow): { id, sort, labels } -> clave del grupo, orden y textos
      * Todas las columnas numericas (C01..C99 mapeadas, IVA y TOTAL) se suman.
@@ -1753,28 +1751,32 @@ sap.ui.define([
         docType: {
             buttonKey: "summaryButton",
             tooltipKey: "summaryTooltip",
-            select: ["TipDocSat", "DescTipoDocumento"],
+            select: function () {
+                return [CFG.campos.tipoDocumento, CFG.campos.descripcionTipoDocumento];
+            },
             labelColumns: [{ headerKey: "summaryType", width: "18rem" }],
             group: function (oRow) {
-                var sCode = trimValue(oRow.TipDocSat);
+                var sCode = trimValue(oRow[CFG.campos.tipoDocumento]);
                 return {
                     id: sCode,
                     sort: sCode,
-                    labels: [formatTypeLabel(sCode, trimValue(oRow.DescTipoDocumento))]
+                    labels: [formatTypeLabel(sCode, trimValue(oRow[CFG.campos.descripcionTipoDocumento]))]
                 };
             }
         },
         taxCode: {
             buttonKey: "summaryTaxButton",
             tooltipKey: "summaryTaxTooltip",
-            select: ["TaxCode", "TaxCodeName"],
+            select: function () {
+                return [CFG.campos.indicadorImpuesto, CFG.campos.nombreIndicadorImpuesto];
+            },
             labelColumns: [
                 { headerKey: "summaryTaxCode", width: "8rem" },
                 { headerKey: "summaryTaxCodeName", width: "18rem" }
             ],
             group: function (oRow) {
-                var sCode = trimValue(oRow.TaxCode);
-                var sName = trimValue(oRow.TaxCodeName);
+                var sCode = trimValue(oRow[CFG.campos.indicadorImpuesto]);
+                var sName = trimValue(oRow[CFG.campos.nombreIndicadorImpuesto]);
                 return {
                     id: sCode + "|" + sName,
                     sort: sCode,
@@ -1786,10 +1788,14 @@ sap.ui.define([
 
     /** Columnas numericas del resumen: C01..C99 mapeadas, IVA y TOTAL. */
     function getSummaryAmountColumns() {
+        var oBundle = getResourceBundle();
         var aColumns = getMappedDynamicKeys().map(function (sKey) {
             return { header: oState.mParametrosMap[sKey], key: sKey.toUpperCase() };
         });
-        aColumns.push({ header: "IVA", key: "ImporteIVA" }, { header: "TOTAL", key: "Total" });
+        aColumns.push(
+            { header: oBundle.getText("summaryIvaColumn"), key: CFG.campos.iva },
+            { header: oBundle.getText("summaryTotalColumn"), key: CFG.campos.total }
+        );
         return aColumns;
     }
 
@@ -1813,7 +1819,9 @@ sap.ui.define([
                 mGroups[oInfo.id] = oGroup;
                 aGroups.push(oGroup);
             }
-            var sDocKey = [oRow.CompanyCode, oRow.AccountingDocument, oRow.FiscalYear].join("|");
+            var sDocKey = getDocumentKeyFields().map(function (sField) {
+                return oRow[sField];
+            }).join("|");
             oGroup.docs[sDocKey] = true;
             oGrand.docs[sDocKey] = true;
             aAmountColumns.forEach(function (oCol) {
@@ -1899,8 +1907,8 @@ sap.ui.define([
             return;
         }
         var iToken = ++oState.iSummaryToken;
-        var aSelect = ["ImporteIVA", "Total", "CompanyCode", "AccountingDocument", "FiscalYear"]
-            .concat(oMode.select, getMappedDynamicKeys().map(function (sKey) { return sKey.toUpperCase(); }));
+        var aSelect = [CFG.campos.iva, CFG.campos.total].concat(getDocumentKeyFields(), oMode.select(),
+            getMappedDynamicKeys().map(function (sKey) { return sKey.toUpperCase(); }));
 
         oTable.setBusy(true);
         requestAllRows(oSmartTable, aSelect).then(function (aRows) {
@@ -2166,15 +2174,12 @@ sap.ui.define([
     }
 
     /* ============================================================ */
-    /* PDF generado en backend: accion RAP generarPdf del servicio  */
-    /* OData V2 YMQA13FISB002 (entidad PdfStream). En V2 la accion  */
-    /* es un FunctionImport (POST) y el binario se lee con $value.  */
+    /* PDF generado en backend: accion RAP (config pdf.accion) del  */
+    /* servicio OData V2 config pdf.servicio (entidad pdf.entitySet)*/
+    /* En V2 la accion es un FunctionImport (POST) y el binario se  */
+    /* lee con $value.                                              */
     /* ============================================================ */
 
-    var PDF_SERVICE = "/sap/opu/odata/sap/YMQA13FISB002/";
-    var PDF_ACTION = "generarPdf";
-    var PDF_ENTITY_SET = "PdfStream";
-    var PDF_MEDIA_PROPERTY = "PdfData";
     var EDM_METADATA_NS = "http://schemas.microsoft.com/ado/2007/08/dataservices/metadata";
 
     function localName(sName) {
@@ -2206,7 +2211,10 @@ sap.ui.define([
      * un registro de medios). Devuelve { token, action, entity }.
      */
     function loadPdfService() {
-        return fetch(PDF_SERVICE + "$metadata", {
+        var sService = CFG.pdf.servicio;
+        var sAction = CFG.pdf.accion;
+        var sEntitySet = CFG.pdf.entitySet;
+        return fetch(sService + "$metadata", {
             method: "GET",
             credentials: "same-origin",
             headers: { "X-CSRF-Token": "Fetch" }
@@ -2217,17 +2225,17 @@ sap.ui.define([
             var sToken = oResponse.headers.get("X-CSRF-Token");
             return oResponse.text().then(function (sXml) {
                 var oDoc = new DOMParser().parseFromString(sXml, "application/xml");
-                var oImport = findByAttribute(oDoc, "FunctionImport", "Name", PDF_ACTION);
+                var oImport = findByAttribute(oDoc, "FunctionImport", "Name", sAction);
                 if (!oImport) {
-                    throw new Error("La accion " + PDF_ACTION + " no esta publicada en " + PDF_SERVICE);
+                    throw new Error("La accion " + sAction + " no esta publicada en " + sService);
                 }
                 var aParams = Array.prototype.slice.call(oImport.getElementsByTagName("Parameter")).map(function (oNode) {
                     return { name: oNode.getAttribute("Name"), type: oNode.getAttribute("Type") };
                 });
 
-                var oSet = findByAttribute(oDoc, "EntitySet", "Name", PDF_ENTITY_SET);
+                var oSet = findByAttribute(oDoc, "EntitySet", "Name", sEntitySet);
                 if (!oSet) {
-                    throw new Error("La entidad " + PDF_ENTITY_SET + " no esta publicada en " + PDF_SERVICE);
+                    throw new Error("La entidad " + sEntitySet + " no esta publicada en " + sService);
                 }
                 var oType = findByAttribute(oDoc, "EntityType", "Name", localName(oSet.getAttribute("EntityType")));
                 var sKeyName = oType.getElementsByTagName("PropertyRef")[0].getAttribute("Name");
@@ -2260,7 +2268,7 @@ sap.ui.define([
                 aQuery.push(encodeURIComponent(oParam.name) + "=" + encodeURIComponent(toODataLiteral(oParam.type, vValue)));
             }
         });
-        return fetch(PDF_SERVICE + oSvc.action.name + "?" + aQuery.join("&"), {
+        return fetch(CFG.pdf.servicio + oSvc.action.name + "?" + aQuery.join("&"), {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -2271,7 +2279,7 @@ sap.ui.define([
             return oResponse.json().catch(function () { return {}; }).then(function (oBody) {
                 if (!oResponse.ok) {
                     var oMessage = oBody && oBody.error && oBody.error.message;
-                    throw new Error((oMessage && (oMessage.value || oMessage)) || (PDF_ACTION + " HTTP " + oResponse.status));
+                    throw new Error((oMessage && (oMessage.value || oMessage)) || (CFG.pdf.accion + " HTTP " + oResponse.status));
                 }
                 var oData = oBody && oBody.d;
                 if (oData && oData.results) {
@@ -2289,10 +2297,10 @@ sap.ui.define([
     function downloadPdfStream(oSvc, oRecord) {
         var vKey = oRecord && oRecord[oSvc.entity.keyName];
         if (!vKey) {
-            throw new Error("generarPdf no devolvio la clave (" + oSvc.entity.keyName + ")");
+            throw new Error(CFG.pdf.accion + " no devolvio la clave (" + oSvc.entity.keyName + ")");
         }
-        var sPath = PDF_SERVICE + PDF_ENTITY_SET + "(" + toODataLiteral(oSvc.entity.keyType, vKey) + ")/"
-            + (oSvc.entity.hasStream ? "$value" : PDF_MEDIA_PROPERTY + "/$value");
+        var sPath = CFG.pdf.servicio + CFG.pdf.entitySet + "(" + toODataLiteral(oSvc.entity.keyType, vKey) + ")/"
+            + (oSvc.entity.hasStream ? "$value" : CFG.pdf.propiedadMedia + "/$value");
         return fetch(sPath, {
             method: "GET",
             credentials: "same-origin"
@@ -2308,7 +2316,7 @@ sap.ui.define([
             var sUrl = URL.createObjectURL(oBlob);
             var oLink = document.createElement("a");
             oLink.href = sUrl;
-            oLink.download = oRecord.FileName || "libro de compras.pdf";
+            oLink.download = oRecord.FileName || CFG.pdf.nombreArchivoPorDefecto;
             document.body.appendChild(oLink);
             oLink.click();
             document.body.removeChild(oLink);
@@ -2318,11 +2326,28 @@ sap.ui.define([
 
     /** Periodo del filtro con 3 digitos ("1" -> "001"). Es obligatorio en el filtro. */
     function getPeriodForBackend() {
-        var sPeriod = getFilterValue("FiscalPeriod").trim();
+        var sPeriod = getFilterValue(CFG.filtros.periodo).trim();
         if (!sPeriod) {
             return "";
         }
         return ("000" + sPeriod).slice(-3);
+    }
+
+    /**
+     * Parametros de la accion del PDF (config pdf.parametros: nombre del
+     * parametro -> "sociedad" | "ejercicio" | "periodo"), con el valor del filtro.
+     */
+    function getPdfParams() {
+        var mValues = {
+            sociedad: getFilterValue(CFG.filtros.sociedad).trim().toUpperCase(),
+            ejercicio: getFilterValue(CFG.filtros.ejercicio).trim(),
+            periodo: getPeriodForBackend()
+        };
+        var mParams = {};
+        Object.keys(CFG.pdf.parametros || {}).forEach(function (sParam) {
+            mParams[sParam] = mValues[CFG.pdf.parametros[sParam]] || "";
+        });
+        return mParams;
     }
 
     /* ============================================================ */
@@ -2339,6 +2364,7 @@ sap.ui.define([
              */
             onInit: function () {
                 resetState();
+                loadConfig(this);
                 rememberControls(this);
             },
 
@@ -2362,9 +2388,9 @@ sap.ui.define([
                     return;
                 }
                 var mCurrent = {
-                    company: getFilterValue("P_CompanyCode").trim(),
-                    fiscalYear: getFilterValue("P_FiscalYear").trim(),
-                    period: getFilterValue("FiscalPeriod").trim(),
+                    company: getFilterValue(CFG.filtros.sociedad).trim(),
+                    fiscalYear: getFilterValue(CFG.filtros.ejercicio).trim(),
+                    period: getFilterValue(CFG.filtros.periodo).trim(),
                     searched: !!oState.bSearched && hasRequiredFilters()
                 };
                 // Si aun no se restauro (filtros vacios), se conserva lo pendiente
@@ -2422,18 +2448,17 @@ sap.ui.define([
 
             /**
              * Accion "Descargar PDF". Genera el PDF con el Adobe Form del
-             * backend (accion RAP generarPdf, servicio OData V2
-             * YMQA13FISB002, entidad PdfStream) y lo descarga.
+             * backend (config pdf: accion RAP, servicio OData V2 y entidad
+             * del stream) y lo descarga.
              */
             onExportPdfBackend: function () {
                 var oBundle = getResourceBundle();
-                var mParams = {
-                    CompanyCode: getFilterValue("P_CompanyCode").trim().toUpperCase(),
-                    FiscalYear: getFilterValue("P_FiscalYear").trim(),
-                    FiscalPeriod: getPeriodForBackend()
-                };
+                var mParams = getPdfParams();
+                var bMissing = Object.keys(mParams).some(function (sParam) {
+                    return !mParams[sParam];
+                });
 
-                if (!mParams.CompanyCode || !mParams.FiscalYear || !mParams.FiscalPeriod) {
+                if (bMissing) {
                     MessageToast.show(oBundle.getText("pdfBackendMissingParams"));
                     return;
                 }

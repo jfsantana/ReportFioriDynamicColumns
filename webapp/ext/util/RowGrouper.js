@@ -18,11 +18,32 @@ sap.ui.define([], function () {
      * Modulo sin dependencias de UI para poder probarlo aislado.
      */
 
-    // Columnas que identifican una linea de impuesto dentro de la factura
+    // Columnas que identifican una linea de impuesto dentro de la factura.
+    // Valores por defecto (Compras GT); el controlador los toma de la
+    // configuracion del libro con configure().
     var LINE_LEVEL_FIELDS = ["taxcode", "taxcodename", "taxitem"];
 
     // Campos numericos fijos (ademas de C01..C99)
     var AMOUNT_FIELDS = ["importeiva", "total"];
+
+    function toLowerList(aFields) {
+        return (aFields || []).filter(Boolean).map(function (sField) {
+            return String(sField).toLowerCase();
+        });
+    }
+
+    /**
+     * Ajusta los campos segun la configuracion del libro:
+     * { amountFields: [IVA, Total], lineLevelFields: [Indicador, Nombre, Posicion] }.
+     */
+    function configure(mConfig) {
+        if (mConfig && mConfig.amountFields) {
+            AMOUNT_FIELDS = toLowerList(mConfig.amountFields);
+        }
+        if (mConfig && mConfig.lineLevelFields) {
+            LINE_LEVEL_FIELDS = toLowerList(mConfig.lineLevelFields);
+        }
+    }
 
     /** Columna de importe: C01..C99, IVA o TOTAL. */
     function isAmountField(sField) {
@@ -140,6 +161,7 @@ sap.ui.define([], function () {
     }
 
     return {
+        configure: configure,
         isAmountField: isAmountField,
         needsGrouping: needsGrouping,
         groupRows: groupRows,
