@@ -17,8 +17,8 @@ server:
           url: https://ui5.sap.com
         backend:
           - path: /sap
-            url: http://demo.mqaamericas.com:8005
-            client: '300'
+            url: http://demo.mqaamericas.com:8010
+            client: '100'
     - name: fiori-tools-appreload
       afterMiddleware: compression
       configuration:

@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "YATL01 [DM2_300_ABAP02_ES]",
+			"uri": "abap:/repotree-v1/DM2_300_ABAP02_ES/System Library/YATL01"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "abap"
+	}
+}

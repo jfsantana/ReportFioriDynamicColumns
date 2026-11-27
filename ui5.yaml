@@ -18,8 +18,8 @@ server:
           version: "1.120.52" 
         backend:
           - path: /sap
-            url: http://demo.mqaamericas.com:8005
-            client: '300'
+            url: http://demo.mqaamericas.com:8010
+            client: '100'
             Language: 'S'
     - name: fiori-tools-appreload
       afterMiddleware: compression

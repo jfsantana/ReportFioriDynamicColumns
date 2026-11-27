@@ -12,9 +12,10 @@ builder:
     - name: deploy-to-abap
       afterTask: generateVersionInfo
       configuration:
+        ignoreCertErrors: true     # temporal
         target:
-          url: http://demo.mqaamericas.com:8005
-          client: "300"
+          url: https://mqademoaws.mqaamericas.com:44300
+          client: "100"
           auth: basic
         credentials:
           username: env:UI5_USERNAME
@@ -22,8 +23,8 @@ builder:
         app:
           name: YATL01
           description: Reporte Columnas Dinamicas
-          package: YATL01
-          transport: DM2K900719
+          package: YMQA001
+          transport: DMPK900010
         exclude:
           - /test/
           - /localService/

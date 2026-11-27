@@ -243,6 +243,11 @@
                 <Annotation Term="Common.Label" String="Nº Documento"/>
             </Annotations>
 
+            <!-- Etiqueta de la columna opcional TrataEspecialPoliza (el servicio la llama "Valor verdadero") -->
+            <Annotations Target="cds_ymqaf_sb_taxrpt_enrich_v2.TaxReportEnrichedType/TrataEspecialPoliza">
+                <Annotation Term="Common.Label" String="Trata Especial Poliza"/>
+            </Annotations>
+
             <!-- TIPO: en el detalle se muestra SOLO el codigo SAT ("FEL"), sin descripcion.
                  La descripcion concatenada ("FACTURA (FACT)") se arma en el controller solo
                  para el layout "Total por Tipo de Documento" (formatTypeLabel). -->
